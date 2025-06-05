@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import re
 import json
 
-URL = "https://www.cnbc.com/ai-insights/"
+URL = "https://www.cnbc.com/ai-artificial-intelligence/"
 headers = {"User-Agent": "Mozilla/5.0"}
 
 def fetch_ai_news(max_items=10):

@@ -25,7 +25,7 @@ def run_gold_bot():
 
     # Fallback to standard version
     try:
-        from crawler.crawler_gold import _multiple_sources_multiple_sources, format_as_code_block, send_to_telegram
+        from crawler.crawler_gold import fetch_gold_prices_multiple_sources, format_as_code_block, send_to_telegram
 
         buy_trend, data = fetch_gold_prices_multiple_sources()
         if data:

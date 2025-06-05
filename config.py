@@ -16,10 +16,21 @@ CHAT_ID = os.getenv("CHAT_ID")
 USER_TAG = os.getenv("USER_TAG", "")
 
 # Các hằng số / đường dẫn cố định
-TELEGRAM_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+TELEGRAM_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage" if BOT_TOKEN else None
 URL = "https://www.24h.com.vn/gia-vang-hom-nay-c425.html"
 TIMEOUT = 15
 
-print("Loaded environment variables:")
-for key, value in os.environ.items():
-    print(f"{key}: {value}")
+# Safe logging - only show if variables are set, not their values
+print("Environment variables status:")
+print(f"BOT_TOKEN: {'✅ Set' if BOT_TOKEN else '❌ Missing'}")
+print(f"CHAT_ID: {'✅ Set' if CHAT_ID else '❌ Missing'}")
+print(f"USER_TAG: {'✅ Set' if USER_TAG else '❌ Missing'}")
+
+# Check if running in GitHub Actions
+if os.getenv('GITHUB_ACTIONS') == 'true':
+    print("🐙 Running in GitHub Actions environment")
+    if not BOT_TOKEN or not CHAT_ID:
+        print("❌ Required secrets not found in GitHub Actions!")
+        print("Make sure to set BOT_TOKEN and CHAT_ID in repository secrets.")
+else:
+    print("🏠 Running in local environment")

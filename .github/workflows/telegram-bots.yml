@@ -4,7 +4,7 @@ name: 🤖 Telegram Bots Scheduler
 on:
   schedule:
     # Chạy 3 lần mỗi ngày: 8AM, 2PM, 8PM (UTC+7 = UTC-7 hours)
-    - cron: '0 1,7,13 * * *'  # 8AM, 2PM, 8PM Vietnam time
+    - cron: '0 1,7,13 * * *'  # 8, 14, 20 Vietnam time
 
   # Cho phép chạy thủ công
   workflow_dispatch:
@@ -48,7 +48,11 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
         echo "🔄 Running AI News Bot..."
-        python main.py ai || echo "❌ AI News Bot failed"
+        echo "Checking environment variables..."
+        echo "BOT_TOKEN: ${BOT_TOKEN:0:10}..." 
+        echo "CHAT_ID: $CHAT_ID"
+        echo "USER_TAG: $USER_TAG"
+        timeout 300 python main.py ai || echo "❌ AI News Bot failed or timed out"
 
     - name: 🪙 Run Gold Price Bot
       env:
@@ -57,6 +61,8 @@ jobs:
         USER_TAG: ${{ secrets.USER_TAG }}
       run: |
         echo "🔄 Running Gold Price Bot..."
+        echo "BOT_TOKEN: ${BOT_TOKEN:0:10}..."
+        echo "CHAT_ID: $CHAT_ID" 
         timeout 300 python main.py gold || echo "❌ Gold Price Bot failed or timed out"
       continue-on-error: true
 
@@ -68,6 +74,9 @@ jobs:
         TARGET_URL: ${{ secrets.TARGET_URL }}
       run: |
         echo "🔄 Running Bus Price Bot..."
+        echo "BOT_TOKEN: ${BOT_TOKEN:0:10}..."
+        echo "CHAT_ID: $CHAT_ID"
+        echo "TARGET_URL: $TARGET_URL"
         timeout 600 python main.py bus || echo "❌ Bus Price Bot failed or timed out"
       continue-on-error: true
 

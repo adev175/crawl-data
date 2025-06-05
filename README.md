@@ -1,47 +1,95 @@
-# Gold Price Crawler Bot
 
-This project is a bot that fetches gold prices from a website and sends the data to a Telegram chat. It also provides recommendations based on the trend of gold prices.
+# 🤖 Telegram Bot: AI News, Gold Prices, and Bus Fares
 
-## Installation
+This is a multifunctional **Telegram bot** built with Python. It automates fetching and sending updates about:
 
-1. Clone the repository:
-    ```sh
-    git clone https://github.com/quochuyyy1839/crawl-price-gold.git
-    cd crawl-price-gold
-    ```
+- 📰 Latest AI news from CNBC
+- 🪙 Real-time gold price data in Vietnam
+- 🚌 Cheapest bus fares from Nagaoka to Shinjuku
 
-2. Install the required dependencies:
-    ```sh
-    pip3 install -r requirements.txt
-    ```
+You can run this bot using **Docker** _or_ locally with **Anaconda**. It supports `.env` configuration, modular services, and integrates easily with Telegram.
 
-## Configuration
+---
 
-1. Create a `.env` file in the root directory of the project and add the following variables:
-    ```sh
-    BOT_TOKEN=your_telegram_bot_token
-    CHAT_ID=your_telegram_chat_id
-    USER_TAG=@your_telegram_username
-    ```
+## ⚙️ Environment Variables (.env)
 
-2. Update the following configuration variables in `crawler-gold.py`:
-    - `BOT_TOKEN`: Your Telegram bot token.
-    - `CHAT_ID`: The chat ID where the bot will send messages.
-    - `USER_TAG`: Your Telegram username.
+Before running, create a `.env` file with the following variables:
 
-## Usage
-
-Run the bot:
-```sh
-python3 main.py
-```
-Or simple run:
-```sh
-python3 crawler-gold.py
+```env
+BOT_TOKEN=your_telegram_bot_token
+CHAT_ID=your_telegram_chat_id
+USER_TAG=@your_username  # Optional tag for mentions
+GEMINI_API_KEY=your_google_gemini_key
+TARGET_URL=https://www.bushikaku.net/search/niigata_tokyo/nagaoka_shinjuku/20250605/time_division_type-night/
 ```
 
-The bot will fetch the gold prices, format the data, and send it to the specified Telegram chat. It will also send a recommendation message based on the trend of gold prices.
+---
 
-## License
+## 🚀 Quick Start with Docker
 
-This project is licensed under the MIT License.
+0. Start the Docker Desktop application to ensure Docker is running.
+
+1. Build the image:
+
+```bash
+docker build -t telegram-news-bot .
+```
+
+2. Run the container:
+
+```bash
+docker run --env-file .env telegram-news-bot
+```
+
+All dependencies, including Chrome and ChromeDriver, are handled in the Dockerfile.
+
+---
+
+## 🧪 Local Setup with Anaconda (Recommended for Development)
+
+1. Clone the repository and navigate into the folder:
+
+```bash
+git clone <your-repo-url>
+cd telegram-news-bot
+```
+
+2. Create and activate environment (single line):
+
+```bash
+conda create -n bot_env python=3.10 -y && conda activate bot_env && pip install -r requirements.txt
+```
+
+3. Run the bot:
+
+```bash
+python main.py
+```
+
+---
+
+## 📁 Project Structure
+
+```
+.
+├── main.py                      # Entry point to run all bots
+├── crawl_ai_news.py             # AI news fetcher and formatter
+├── crawler_gold.py              # Gold price fetcher and notifier
+├── bus_price.py                 # Bus fare fetcher using Selenium
+├── services/
+│   ├── fetcher.py               # AI news scraper from CNBC
+│   ├── formatter.py             # Markdown formatting for Telegram
+│   ├── telegram_bot.py          # Message sending abstraction
+├── utils/
+│   └── ai_summarizer.py         # Gemini/OpenAI summarizer (optional)
+├── config.py                    # Loads .env configuration
+├── .env                         # Your environment variables (not committed)
+├── requirements.txt             # All dependencies
+└── Dockerfile                   # Full setup for Chrome + Python
+```
+
+---
+
+## 📄 License
+
+This project is MIT licensed. Feel free to use and modify for personal or educational purposes.

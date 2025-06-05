@@ -25,7 +25,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
+# Create required directories for new bus price tracker
+RUN mkdir -p utils scheduler
+
+# Environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
 EXPOSE 8080
 
 CMD ["python", "main.py"]

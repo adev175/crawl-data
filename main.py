@@ -10,18 +10,36 @@ from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_t
 
 
 def run_gold_bot():
-    """Run gold price bot"""
+    """Run gold price bot with GitHub Actions support"""
     print("Starting gold price bot...")
-    buy_trend, data = fetch_gold_prices()
-    if data:
-        send_to_telegram(format_as_code_block(data))
-        user_tag = os.getenv('USER_TAG', '')
-        if buy_trend == 'increase':
-            send_to_telegram(f"Có nên mua vàng không má {user_tag} 🤔🤔🤔", parse_mode=None)
-        elif buy_trend == 'decrease':
-            send_to_telegram(f"✅ Mua vàng đi má {user_tag} 🧀🧀🧀", parse_mode=None)
-    else:
-        print(buy_trend)
+
+    # Check if running in GitHub Actions
+    if is_github_actions():
+        print("Using enhanced fetcher for GitHub Actions...")
+        try:
+            from crawler.crawler_gold_enhanced import main as enhanced_gold_main
+            enhanced_gold_main()
+            return
+        except ImportError:
+            print("Enhanced gold crawler not found, using standard version...")
+
+    # Fallback to standard version
+    try:
+        from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
+
+        buy_trend, data = fetch_gold_prices()
+        if data:
+            send_to_telegram(format_as_code_block(data))
+            user_tag = os.getenv('USER_TAG', '')
+            if buy_trend == 'increase':
+                send_to_telegram(f"Có nên mua vàng không má {user_tag} 🤔🤔🤔", parse_mode=None)
+            elif buy_trend == 'decrease':
+                send_to_telegram(f"✅ Mua vàng đi má {user_tag} 🧀🧀🧀", parse_mode=None)
+        else:
+            print("No gold data retrieved")
+    except Exception as e:
+        print(f"Gold bot error: {e}")
+
     print("Gold price bot finished.")
 
 

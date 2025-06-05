@@ -2,7 +2,6 @@
 from services.fetcher import fetch_ai_news
 from services.formatter import format_ai_news
 from services.telegram_bot import send_to_telegram
-from utils.ai_summarizer import summarize_news_with_gemini
 from config import USER_TAG
 
 def run_ai_bot():

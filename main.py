@@ -5,7 +5,7 @@ from crawler.crawler_bus_price import fetch_cheapest_bus_price
 
 def main():
     print("=== Running all bots ===")
-    run_ai_bot()
+    # run_ai_bot()
     # run_gold_bot()
     fetch_cheapest_bus_price()
 

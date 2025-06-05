@@ -6,7 +6,7 @@ from datetime import datetime
 # Import all bot modules
 from crawler.crawl_ai_news import run_ai_bot
 from crawler.crawler_bus_price_complete import BusPriceTracker
-from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
+from crawler.crawler_gold import fetch_gold_prices_multiple_sources, format_as_code_block, send_to_telegram
 
 
 def run_gold_bot():
@@ -25,9 +25,9 @@ def run_gold_bot():
 
     # Fallback to standard version
     try:
-        from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
+        from crawler.crawler_gold import _multiple_sources_multiple_sources, format_as_code_block, send_to_telegram
 
-        buy_trend, data = fetch_gold_prices()
+        buy_trend, data = fetch_gold_prices_multiple_sources()
         if data:
             send_to_telegram(format_as_code_block(data))
             user_tag = os.getenv('USER_TAG', '')

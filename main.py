@@ -5,7 +5,7 @@ from datetime import datetime
 
 # Import all bot modules
 from crawler.crawl_ai_news import run_ai_bot
-from crawler.bus_price_complete import BusPriceTracker
+from crawler.crawler_bus_price_complete import BusPriceTracker
 from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
 
 
@@ -83,6 +83,14 @@ def start_bus_scheduler():
         print(f"Scheduler error: {e}")
 
 
+def is_interactive():
+    """Check if running in interactive mode"""
+    try:
+        return sys.stdin.isatty()
+    except:
+        return False
+
+
 def main():
     """Main function with interactive menu"""
     print(f"🚀 Starting Telegram Bot Suite - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -114,6 +122,30 @@ def main():
             print("  python main.py all       # Run all bots")
             print("  python main.py schedule  # Start bus price scheduler")
             print("  python main.py db        # View bus database")
+        return
+
+    # If not interactive (Docker), run all bots by default
+    if not is_interactive():
+        print("🐳 Running in Docker mode - executing all bots")
+        try:
+            run_ai_bot()
+            print("✅ AI News Bot completed")
+        except Exception as e:
+            print(f"❌ AI News Bot failed: {e}")
+
+        try:
+            run_gold_bot()
+            print("✅ Gold Price Bot completed")
+        except Exception as e:
+            print(f"❌ Gold Price Bot failed: {e}")
+
+        try:
+            run_bus_bot()
+            print("✅ Bus Price Bot completed")
+        except Exception as e:
+            print(f"❌ Bus Price Bot failed: {e}")
+
+        print("=== Docker execution completed ===")
         return
 
     # Interactive mode

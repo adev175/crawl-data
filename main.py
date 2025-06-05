@@ -1,4 +1,4 @@
-# main.py
+# main.py - Updated for GitHub Actions
 import sys
 import os
 from datetime import datetime
@@ -31,6 +31,19 @@ def run_bus_bot():
     tracker = BusPriceTracker()
     tracker.run()
     print("Bus price bot finished.")
+
+
+def is_github_actions():
+    """Check if running in GitHub Actions"""
+    return os.getenv('GITHUB_ACTIONS') == 'true'
+
+
+def is_interactive():
+    """Check if running in interactive mode"""
+    try:
+        return sys.stdin.isatty() and not is_github_actions()
+    except:
+        return False
 
 
 def show_menu():
@@ -83,50 +96,53 @@ def start_bus_scheduler():
         print(f"Scheduler error: {e}")
 
 
-def is_interactive():
-    """Check if running in interactive mode"""
-    try:
-        return sys.stdin.isatty()
-    except:
-        return False
-
-
 def main():
-    """Main function with interactive menu"""
+    """Main function with GitHub Actions support"""
     print(f"🚀 Starting Telegram Bot Suite - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # GitHub Actions mode
+    if is_github_actions():
+        print("🐙 Running in GitHub Actions mode")
 
     # Check if running with command line arguments
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
 
-        if command == "ai":
-            run_ai_bot()
-        elif command == "gold":
-            run_gold_bot()
-        elif command == "bus":
-            run_bus_bot()
-        elif command == "all":
-            print("=== Running all bots ===")
-            run_ai_bot()
-            run_gold_bot()
-            run_bus_bot()
-        elif command == "schedule":
-            start_bus_scheduler()
-        elif command == "db":
-            view_bus_database()
-        else:
-            print("Available commands:")
-            print("  python main.py ai        # Run AI news bot")
-            print("  python main.py gold      # Run gold price bot")
-            print("  python main.py bus       # Run bus price bot")
-            print("  python main.py all       # Run all bots")
-            print("  python main.py schedule  # Start bus price scheduler")
-            print("  python main.py db        # View bus database")
+        try:
+            if command == "ai":
+                run_ai_bot()
+            elif command == "gold":
+                run_gold_bot()
+            elif command == "bus":
+                run_bus_bot()
+            elif command == "all":
+                print("=== Running all bots ===")
+                run_ai_bot()
+                run_gold_bot()
+                run_bus_bot()
+            elif command == "schedule":
+                start_bus_scheduler()
+            elif command == "db":
+                view_bus_database()
+            else:
+                print("Available commands:")
+                print("  python main.py ai        # Run AI news bot")
+                print("  python main.py gold      # Run gold price bot")
+                print("  python main.py bus       # Run bus price bot")
+                print("  python main.py all       # Run all bots")
+                print("  python main.py schedule  # Start bus price scheduler")
+                print("  python main.py db        # View bus database")
+
+        except Exception as e:
+            print(f"❌ Error running {command}: {e}")
+            # Don't exit with error code in GitHub Actions to avoid failing the workflow
+            if not is_github_actions():
+                sys.exit(1)
         return
 
-    # If not interactive (Docker), run all bots by default
+    # If not interactive (Docker or GitHub Actions), run all bots by default
     if not is_interactive():
-        print("🐳 Running in Docker mode - executing all bots")
+        print("🤖 Running in non-interactive mode - executing all bots")
         try:
             run_ai_bot()
             print("✅ AI News Bot completed")
@@ -145,7 +161,7 @@ def main():
         except Exception as e:
             print(f"❌ Bus Price Bot failed: {e}")
 
-        print("=== Docker execution completed ===")
+        print("=== Execution completed ===")
         return
 
     # Interactive mode

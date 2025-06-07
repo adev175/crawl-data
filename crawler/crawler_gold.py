@@ -61,7 +61,7 @@ def create_enhanced_session():
     return session
 
 
-def fetch_gold_prices_multiple_sources():
+def fetch_gold_prices():
     """Try multiple gold price sources"""
     sources = [
         {
@@ -283,7 +283,7 @@ def main():
     print("Starting enhanced gold price bot...")
 
     try:
-        buy_trend, data, source_name = fetch_gold_prices_multiple_sources()
+        buy_trend, data, source_name = fetch_gold_prices()
 
         if data:
             send_to_telegram(format_as_code_block(data, source_name))

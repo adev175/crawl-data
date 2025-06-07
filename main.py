@@ -6,7 +6,7 @@ from datetime import datetime
 # Import all bot modules
 from crawler.crawl_ai_news import run_ai_bot
 from crawler.crawler_bus_price_complete import BusPriceTracker
-from crawler.crawler_gold import fetch_gold_prices_multiple_sources, format_as_code_block, send_to_telegram
+from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
 
 
 def run_gold_bot():
@@ -25,9 +25,9 @@ def run_gold_bot():
 
     # Fallback to standard version
     try:
-        from crawler.crawler_gold import fetch_gold_prices_multiple_sources, format_as_code_block, send_to_telegram
+        from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
 
-        buy_trend, data = fetch_gold_prices_multiple_sources()
+        buy_trend, data = fetch_gold_prices()
         if data:
             send_to_telegram(format_as_code_block(data))
             user_tag = os.getenv('USER_TAG', '')
@@ -44,10 +44,31 @@ def run_gold_bot():
 
 
 def run_bus_bot():
-    """Run bus price bot"""
+    """Run bus price bot with fallback support"""
     print("Starting bus price bot...")
-    tracker = BusPriceTracker()
-    tracker.run()
+
+    try:
+        # Try stable version first
+        from crawler.stable_bus_crawler import StableBusPriceTracker
+        tracker = StableBusPriceTracker()
+        success = tracker.run()
+
+        if not success:
+            print("⚠️ Stable tracker failed, trying original version...")
+            # Fallback to original
+            from crawler.crawler_bus_price_complete import BusPriceTracker
+            original_tracker = BusPriceTracker()
+            original_tracker.run()
+
+    except Exception as e:
+        print(f"❌ All bus tracking methods failed: {e}")
+        # Send error notification
+        try:
+            from services.telegram_bot import send_to_telegram
+            send_to_telegram(f"❌ Bus bot error: {str(e)[:100]}...", parse_mode=None)
+        except:
+            pass
+
     print("Bus price bot finished.")
 
 
@@ -75,7 +96,9 @@ def show_menu():
     print("4. Run All Bots")
     print("5. View Bus Price Database")
     print("6. Schedule Bus Price Monitoring")
-    print("7. Exit")
+    print("7. Start Interactive Chatbot")
+    print("8. Chatbot Manager")
+    print("9. Exit")
     print("-" * 50)
 
 
@@ -142,6 +165,11 @@ def main():
                 start_bus_scheduler()
             elif command == "db":
                 view_bus_database()
+            elif command == "chatbot":
+                # Start interactive chatbot
+                from telegram_chatbot import TelegramChatBot
+                bot = TelegramChatBot()
+                bot.start_polling()
             else:
                 print("Available commands:")
                 print("  python main.py ai        # Run AI news bot")
@@ -150,6 +178,7 @@ def main():
                 print("  python main.py all       # Run all bots")
                 print("  python main.py schedule  # Start bus price scheduler")
                 print("  python main.py db        # View bus database")
+                print("  python main.py chatbot   # Start interactive chatbot")
 
         except Exception as e:
             print(f"❌ Error running {command}: {e}")
@@ -226,11 +255,35 @@ def main():
                 start_bus_scheduler()
 
             elif choice == "7":
+                # Start interactive chatbot
+                try:
+                    from telegram_chatbot import TelegramChatBot
+                    print("🤖 Starting interactive chatbot...")
+                    print("💬 Users can now message the bot to trigger commands!")
+                    print("⏹️  Press Ctrl+C to stop chatbot")
+
+                    bot = TelegramChatBot()
+                    bot.start_polling()
+                except KeyboardInterrupt:
+                    print("\n🛑 Chatbot stopped")
+                except Exception as e:
+                    print(f"❌ Chatbot error: {e}")
+
+            elif choice == "8":
+                # Chatbot manager
+                try:
+                    from chatbot_manager import ChatbotManager
+                    manager = ChatbotManager()
+                    manager.interactive_menu()
+                except Exception as e:
+                    print(f"❌ Chatbot manager error: {e}")
+
+            elif choice == "9":
                 print("👋 Goodbye!")
                 break
 
             else:
-                print("❌ Invalid option! Please select 1-7.")
+                print("❌ Invalid option! Please select 1-9.")
 
             input("\nPress Enter to continue...")
 

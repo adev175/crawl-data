@@ -61,7 +61,7 @@ def create_enhanced_session():
     return session
 
 
-def fetch_gold_prices():
+def fetch_gold_prices_multiple_sources():
     """Try multiple gold price sources"""
     sources = [
         {

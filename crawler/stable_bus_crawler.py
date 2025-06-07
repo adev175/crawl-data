@@ -14,7 +14,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 from services.telegram_bot import send_to_telegram
 
 
-class BusPriceTracker:
+class StableBusPriceTracker:
     def __init__(self):
         self.db_file = "bus_prices.db"
         self.init_database()
@@ -448,7 +448,7 @@ class BusPriceTracker:
 
 def main():
     """Main function"""
-    tracker = BusPriceTracker()
+    tracker = StableBusPriceTracker()
     return tracker.run()
 
 

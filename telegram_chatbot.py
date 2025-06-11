@@ -1,11 +1,11 @@
-# telegram_chatbot.py
+# telegram_chatbot.py - Updated with Service Registry
 import os
 import time
 import threading
 from datetime import datetime
 import requests
-import json
 from dotenv import load_dotenv
+from services.service_registry import registry
 
 # Load environment
 load_dotenv()
@@ -21,24 +21,14 @@ class TelegramChatBot:
         self.chat_id = CHAT_ID
         self.last_update_id = 0
         self.running = False
+        self.service_registry = registry
 
-        # Bot commands and keywords
-        self.commands = {
-            # Bus related
-            'bus': ['bus', 'xe', 'xe buýt', 'bus time', 'bus price', 'giá xe'],
-
-            # Gold related
-            'gold': ['gold', 'vàng', 'giá vàng', 'vang', 'gia vang'],
-
-            # AI News related
-            'ai': ['ai', 'ai news', 'tin ai', 'news', 'tin tức', 'tech news'],
-
-            # Help and status
+        # Built-in system commands
+        self.system_commands = {
             'help': ['help', 'trợ giúp', 'commands', 'menu', '/start', '/help'],
             'status': ['status', 'tình trạng', 'ping', 'alive'],
-
-            # All bots
-            'all': ['all', 'tất cả', 'all bots', 'run all', 'chạy tất cả']
+            'all': ['all', 'tất cả', 'all bots', 'run all', 'chạy tất cả'],
+            'list': ['list', 'services', 'danh sách', 'available']
         }
 
     def send_message(self, text, parse_mode=None):
@@ -76,172 +66,188 @@ class TelegramChatBot:
             return None
 
     def classify_message(self, text):
-        """Classify user message to determine which bot to run"""
+        """Classify user message to determine action"""
         text_lower = text.lower().strip()
 
-        # Check each command category
-        for category, keywords in self.commands.items():
+        # Check system commands first
+        for command, keywords in self.system_commands.items():
             for keyword in keywords:
                 if keyword in text_lower:
-                    return category
+                    return ('system', command)
 
-        # Default response for unrecognized messages
-        return 'help'
+        # Check service registry
+        service = self.service_registry.get_service_by_keyword(text)
+        if service:
+            config = service.get_config()
+            return ('service', config.name)
 
-    def run_bus_bot(self):
-        """Run bus price bot"""
+        # Default to help
+        return ('system', 'help')
+
+    def execute_service(self, service_name):
+        """Execute a service with status updates"""
         try:
-            self.send_message("🚌 Đang kiểm tra giá xe bus... Vui lòng đợi!")
+            service = self.service_registry.services.get(service_name)
+            if not service:
+                self.send_message(f"❌ Service '{service_name}' not found")
+                return
 
-            from crawler.crawler_bus_price_complete import BusPriceTracker
-            tracker = BusPriceTracker()
-            tracker.run()
+            config = service.get_config()
 
-            print("✅ Bus bot completed")
+            # Send status message
+            self.send_message(f"{config.emoji} Đang {config.description.lower()}... Vui lòng đợi!")
+
+            # Execute service
+            start_time = datetime.now()
+            success = service.execute()
+            end_time = datetime.now()
+
+            duration = (end_time - start_time).total_seconds()
+
+            if success:
+                self.send_message(f"✅ {config.name} hoàn thành! (Thời gian: {duration:.1f}s)")
+            else:
+                self.send_message(f"❌ {config.name} thất bại!")
+
+            print(f"{'✅' if success else '❌'} {config.name} completed in {duration:.1f}s")
+
         except Exception as e:
-            error_msg = f"❌ Lỗi khi chạy bus bot: {str(e)}"
+            error_msg = f"❌ Lỗi khi chạy {service_name}: {str(e)}"
             self.send_message(error_msg)
             print(error_msg)
 
-    def run_gold_bot(self):
-        """Run gold price bot"""
+    def execute_all_services(self):
+        """Execute all enabled services"""
         try:
-            self.send_message("🪙 Đang kiểm tra giá vàng... Vui lòng đợi!")
+            services = self.service_registry.get_all_services()
+            if not services:
+                self.send_message("❌ Không có service nào được kích hoạt")
+                return
 
-            # Try enhanced version first for better reliability
-            try:
-                from crawler.crawler_gold_enhanced import main as enhanced_gold_main
-                enhanced_gold_main()
-            except ImportError:
-                # Fallback to standard version
-                from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
-                buy_trend, data = fetch_gold_prices()
-                if data:
-                    send_to_telegram(format_as_code_block(data))
-                    if buy_trend == 'increase':
-                        send_to_telegram(f"Có nên mua vàng không má {USER_TAG} 🤔🤔🤔", parse_mode=None)
-                    elif buy_trend == 'decrease':
-                        send_to_telegram(f"✅ Mua vàng đi má {USER_TAG} 🧀🧀🧀", parse_mode=None)
+            self.send_message(f"🚀 Chạy tất cả services ({len(services)} services)...")
+
+            completed = 0
+            failed = 0
+
+            for i, (name, service) in enumerate(services.items(), 1):
+                config = service.get_config()
+                self.send_message(f"{i}/{len(services)}: {config.emoji} Đang {config.description.lower()}...")
+
+                success = service.execute()
+                if success:
+                    completed += 1
                 else:
-                    self.send_message("❌ Không thể lấy dữ liệu giá vàng")
+                    failed += 1
 
-            print("✅ Gold bot completed")
+                time.sleep(2)  # Delay between services
+
+            summary = f"🎉 Hoàn thành tất cả services!\n\n"
+            summary += f"✅ Thành công: {completed}\n"
+            summary += f"❌ Thất bại: {failed}\n"
+            summary += f"📊 Tổng cộng: {len(services)}"
+
+            self.send_message(summary)
+            print(f"All services completed: {completed} success, {failed} failed")
+
         except Exception as e:
-            error_msg = f"❌ Lỗi khi chạy gold bot: {str(e)}"
-            self.send_message(error_msg)
-            print(error_msg)
-
-    def run_ai_bot(self):
-        """Run AI news bot"""
-        try:
-            self.send_message("🤖 Đang lấy tin tức AI mới nhất... Vui lòng đợi!")
-
-            from crawler.crawl_ai_news import run_ai_bot
-            run_ai_bot()
-
-            print("✅ AI news bot completed")
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi chạy AI news bot: {str(e)}"
-            self.send_message(error_msg)
-            print(error_msg)
-
-    def run_all_bots(self):
-        """Run all bots sequentially"""
-        try:
-            self.send_message("🚀 Chạy tất cả bots... Có thể mất vài phút!")
-
-            # Run each bot
-            self.run_ai_bot()
-            time.sleep(2)
-            self.run_gold_bot()
-            time.sleep(2)
-            self.run_bus_bot()
-
-            self.send_message("✅ Đã chạy xong tất cả bots!")
-            print("✅ All bots completed")
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi chạy all bots: {str(e)}"
+            error_msg = f"❌ Lỗi khi chạy all services: {str(e)}"
             self.send_message(error_msg)
             print(error_msg)
 
     def show_help(self):
-        """Show help message with available commands"""
-        help_text = f"""🤖 Chatbot Commands:
+        """Show help message with all available services"""
+        help_text = self.service_registry.get_help_text()
 
-🚌 **Bus Commands:**
-• "bus" / "xe" / "bus time" / "giá xe"
-→ Kiểm tra giá xe bus Nagaoka → Shinjuku
+        # Add system commands
+        help_text += "\n**System Commands:**\n"
+        help_text += "• `help` → Show this menu\n"
+        help_text += "• `status` → Check bot status\n"
+        help_text += "• `all` → Run all services\n"
+        help_text += "• `list` → List available services\n"
 
-🪙 **Gold Commands:**  
-• "gold" / "vàng" / "giá vàng"
-→ Kiểm tra giá vàng hôm nay
-
-🤖 **AI News Commands:**
-• "ai" / "news" / "tin ai" / "tin tức"  
-→ Tin tức AI mới nhất từ CNBC
-
-🚀 **Other Commands:**
-• "all" / "tất cả" → Chạy tất cả bots
-• "status" / "ping" → Kiểm tra bot có hoạt động
-• "help" / "trợ giúp" → Hiển thị menu này
-
-💬 **Cách sử dụng:**
-Chỉ cần nhắn một trong các từ khóa trên!
-
-VD: "bus time" → Bot sẽ tự động check giá xe
-"""
-        self.send_message(help_text)
+        self.send_message(help_text, parse_mode="Markdown")
 
     def show_status(self):
-        """Show bot status"""
+        """Show bot status and available services"""
         current_time = datetime.now().strftime("%H:%M:%S %d/%m/%Y")
-        status_text = f"""🟢 Bot đang hoạt động!
+        services = self.service_registry.get_all_services()
 
-⏰ Thời gian: {current_time}
-🤖 Chatbot: Online
-📱 Telegram: Connected
-{USER_TAG} Status: Active
+        status_text = f"""🟢 **Bot Status: Online**
 
-Nhắn "help" để xem commands!"""
+⏰ **Time:** {current_time}
+🤖 **Chatbot:** Active
+📱 **Telegram:** Connected
+🔧 **Services:** {len(services)} available
+{USER_TAG} **User:** Active
 
-        self.send_message(status_text)
+💬 Send `help` for commands or `list` for services!"""
+
+        self.send_message(status_text, parse_mode="Markdown")
+
+    def list_services(self):
+        """List all available services by category"""
+        categories = {}
+
+        for service in self.service_registry.get_all_services().values():
+            config = service.get_config()
+            if config.category not in categories:
+                categories[config.category] = []
+            categories[config.category].append(config)
+
+        message = "📋 **Available Services:**\n\n"
+
+        for category, configs in categories.items():
+            message += f"**{category.title()}** ({len(configs)}):\n"
+            for config in configs:
+                status = "✅" if config.enabled else "❌"
+                message += f"{status} {config.emoji} {config.name}\n"
+            message += "\n"
+
+        message += f"💡 Total: {len(self.service_registry.get_all_services())} services\n"
+        message += "Type any keyword to trigger a service!"
+
+        self.send_message(message, parse_mode="Markdown")
 
     def handle_message(self, message):
         """Handle incoming message"""
         try:
             text = message.get('text', '')
             user = message.get('from', {})
-            chat = message.get('chat', {})
 
             username = user.get('username', user.get('first_name', 'Unknown'))
 
             print(f"📨 Message from {username}: {text}")
 
-            # Classify and respond
-            command = self.classify_message(text)
+            # Classify message
+            action_type, action_value = self.classify_message(text)
 
-            if command == 'bus':
-                # Run in background thread to avoid blocking
-                threading.Thread(target=self.run_bus_bot, daemon=True).start()
+            if action_type == 'system':
+                if action_value == 'help':
+                    self.show_help()
+                elif action_value == 'status':
+                    self.show_status()
+                elif action_value == 'list':
+                    self.list_services()
+                elif action_value == 'all':
+                    threading.Thread(target=self.execute_all_services, daemon=True).start()
 
-            elif command == 'gold':
-                threading.Thread(target=self.run_gold_bot, daemon=True).start()
-
-            elif command == 'ai':
-                threading.Thread(target=self.run_ai_bot, daemon=True).start()
-
-            elif command == 'all':
-                threading.Thread(target=self.run_all_bots, daemon=True).start()
-
-            elif command == 'status':
-                self.show_status()
-
-            elif command == 'help':
-                self.show_help()
+            elif action_type == 'service':
+                # Execute service in background thread
+                threading.Thread(target=self.execute_service, args=(action_value,), daemon=True).start()
 
             else:
-                # Unrecognized command
-                self.send_message(f"🤔 Không hiểu '{text}'\n\nNhắn 'help' để xem các commands có sẵn!")
+                # Fallback
+                suggestions = []
+                for service in list(self.service_registry.get_all_services().values())[:3]:
+                    config = service.get_config()
+                    suggestions.extend(config.keywords[:2])
+
+                suggestion_text = ', '.join([f"`{s}`" for s in suggestions])
+
+                self.send_message(
+                    f"🤔 Không hiểu '{text}'\n\n💡 **Thử:** {suggestion_text}\n\n❓ Hoặc gõ `help` để xem tất cả commands",
+                    parse_mode="Markdown"
+                )
 
         except Exception as e:
             print(f"Error handling message: {e}")
@@ -249,24 +255,31 @@ Nhắn "help" để xem commands!"""
 
     def start_polling(self):
         """Start bot polling loop"""
-        print("🤖 Starting Telegram chatbot...")
-        print(f"Bot token: {self.bot_token[:10]}..." if self.bot_token else "❌ No bot token")
-        print(f"Chat ID: {self.chat_id}")
+        print("🤖 Starting Enhanced Telegram Chatbot...")
+        print(f"🔧 Loaded {len(self.service_registry.get_all_services())} services")
 
         if not self.bot_token or not self.chat_id:
             print("❌ Missing BOT_TOKEN or CHAT_ID")
             return
 
-        # Send startup message
-        self.send_message(f"🤖 Chatbot started! {USER_TAG}\n\nNhắn 'help' để xem commands.")
+        # Send startup message with service count
+        services_count = len(self.service_registry.get_all_services())
+        startup_msg = f"""🤖 **Enhanced Chatbot Started!**
+
+🔧 **Services:** {services_count} available
+💬 Send `help` for commands
+📋 Send `list` for service list
+🚀 Send `all` to run all services
+{USER_TAG} Ready to help!"""
+
+        self.send_message(startup_msg, parse_mode="Markdown")
 
         self.running = True
         error_count = 0
-        max_errors = 5
+        max_errors = 10
 
         while self.running:
             try:
-                # Get updates
                 updates_data = self.get_updates()
 
                 if updates_data and updates_data.get('ok'):
@@ -278,25 +291,24 @@ Nhắn "help" để xem commands!"""
                         if 'message' in update:
                             self.handle_message(update['message'])
 
-                # Reset error count on success
                 error_count = 0
-                time.sleep(1)  # Small delay to avoid rate limiting
+                time.sleep(1)
 
             except KeyboardInterrupt:
-                print("\n🛑 Stopping chatbot...")
+                print("\n🛑 Stopping enhanced chatbot...")
                 self.running = False
                 self.send_message("🛑 Chatbot stopped")
 
             except Exception as e:
                 error_count += 1
-                print(f"❌ Error in polling loop: {e} (attempt {error_count}/{max_errors})")
+                print(f"❌ Polling error: {e} (attempt {error_count}/{max_errors})")
 
                 if error_count >= max_errors:
                     print("💀 Too many errors, stopping bot")
-                    self.send_message("❌ Bot gặp lỗi quá nhiều, tạm dừng hoạt động")
+                    self.send_message("❌ Bot encountering too many errors, stopping...")
                     break
 
-                time.sleep(5)  # Wait before retry
+                time.sleep(min(5 * error_count, 30))  # Exponential backoff
 
     def stop(self):
         """Stop the bot"""

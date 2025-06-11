@@ -370,9 +370,9 @@ class BusPriceTracker:
             message += f"💰 Giá thấp nhất tuần này: ¥{lowest_week_price:,}\n\n"
 
             if prices_data:
-                message += "📅 Giá 2 tuần gần nhất:\n"
-                # Sort dates and take only the most recent 14 entries
-                sorted_dates = sorted(prices_data.items(), key=lambda x: x[0], reverse=True)[:14]
+                message += "📅 Giá 1 tuần gần nhất:\n"
+                # Sort dates and take only the most recent 7 entries
+                sorted_dates = sorted(prices_data.items(), key=lambda x: x[0], reverse=True)[:7]
                 for date_str, price in sorted_dates:
                     try:
                         date_obj = datetime.strptime(date_str, "%Y-%m-%d")

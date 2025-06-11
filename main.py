@@ -215,7 +215,7 @@ def main():
     while True:
         try:
             show_menu()
-            choice = input("Select option (1-7): ").strip()
+            choice = input("Select option (1-9): ").strip()  # Fixed: was (1-7)
 
             if choice == "1":
                 run_ai_bot()

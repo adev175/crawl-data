@@ -1,4 +1,4 @@
-# telegram_chatbot.py
+# telegram_chatbot.py - Webhook Version
 import os
 import time
 import threading
@@ -6,6 +6,9 @@ from datetime import datetime
 import requests
 import json
 from dotenv import load_dotenv
+from flask import Flask, request
+import hashlib
+import hmac
 
 # Load environment
 load_dotenv()
@@ -13,16 +16,21 @@ load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
 USER_TAG = os.getenv('USER_TAG', '')
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # https://yourserver.com/telegram-webhook
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'your-secret-key')  # Để verify webhook
+
+# Flask app for webhook
+app = Flask(__name__)
 
 
 class TelegramChatBot:
     def __init__(self):
         self.bot_token = BOT_TOKEN
         self.chat_id = CHAT_ID
-        self.last_update_id = 0
-        self.running = False
+        self.webhook_url = WEBHOOK_URL
+        self.webhook_secret = WEBHOOK_SECRET
 
-        # Bot commands and keywords
+        # Bot commands and keywords (giữ nguyên)
         self.commands = {
             # Bus related
             'bus': ['bus', 'xe', 'xe buýt', 'bus time', 'bus price', 'giá xe'],
@@ -58,22 +66,91 @@ class TelegramChatBot:
             print(f"Error sending message: {e}")
             return False
 
-    def get_updates(self):
-        """Get updates from Telegram"""
+    def set_webhook(self):
+        """Đăng ký webhook với Telegram"""
         try:
-            url = f"https://api.telegram.org/bot{self.bot_token}/getUpdates"
-            params = {
-                'offset': self.last_update_id + 1,
-                'timeout': 10
+            url = f"https://api.telegram.org/bot{self.bot_token}/setWebhook"
+            data = {
+                'url': self.webhook_url,
+                'allowed_updates': ['message'],
+                'drop_pending_updates': True  # Xóa các update cũ
             }
 
-            response = requests.get(url, params=params, timeout=15)
-            if response.status_code == 200:
-                return response.json()
-            return None
+            # Thêm secret token để verify (tùy chọn)
+            if self.webhook_secret:
+                data['secret_token'] = self.webhook_secret
+
+            response = requests.post(url, data=data, timeout=10)
+            result = response.json()
+
+            if result.get('ok'):
+                print(f"✅ Webhook set successfully: {self.webhook_url}")
+                return True
+            else:
+                print(f"❌ Failed to set webhook: {result}")
+                return False
+
         except Exception as e:
-            print(f"Error getting updates: {e}")
+            print(f"❌ Error setting webhook: {e}")
+            return False
+
+    def delete_webhook(self):
+        """Xóa webhook (chuyển về polling)"""
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/deleteWebhook"
+            response = requests.post(url, timeout=10)
+            result = response.json()
+
+            if result.get('ok'):
+                print("✅ Webhook deleted successfully")
+                return True
+            else:
+                print(f"❌ Failed to delete webhook: {result}")
+                return False
+
+        except Exception as e:
+            print(f"❌ Error deleting webhook: {e}")
+            return False
+
+    def get_webhook_info(self):
+        """Kiểm tra thông tin webhook hiện tại"""
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/getWebhookInfo"
+            response = requests.get(url, timeout=10)
+            result = response.json()
+
+            if result.get('ok'):
+                info = result['result']
+                print(f"🔍 Webhook Info:")
+                print(f"   URL: {info.get('url', 'None')}")
+                print(f"   Pending updates: {info.get('pending_update_count', 0)}")
+                print(f"   Last error: {info.get('last_error_message', 'None')}")
+                return info
             return None
+
+        except Exception as e:
+            print(f"❌ Error getting webhook info: {e}")
+            return None
+
+    def verify_webhook_signature(self, request):
+        """Verify webhook đến từ Telegram (bảo mật)"""
+        if not self.webhook_secret:
+            return True  # Nếu không set secret thì bỏ qua verify
+
+        try:
+            # Lấy signature từ header
+            telegram_signature = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+
+            if not telegram_signature:
+                print("⚠️ Missing webhook signature")
+                return False
+
+            # So sánh với secret đã set
+            return telegram_signature == self.webhook_secret
+
+        except Exception as e:
+            print(f"❌ Error verifying signature: {e}")
+            return False
 
     def classify_message(self, text):
         """Classify user message to determine which bot to run"""
@@ -189,17 +266,25 @@ class TelegramChatBot:
 Chỉ cần nhắn một trong các từ khóa trên!
 
 VD: "bus time" → Bot sẽ tự động check giá xe
+
+🎣 **Mode: Webhook (Realtime)**
 """
         self.send_message(help_text)
 
     def show_status(self):
         """Show bot status"""
         current_time = datetime.now().strftime("%H:%M:%S %d/%m/%Y")
+
+        # Kiểm tra webhook info
+        webhook_info = self.get_webhook_info()
+        webhook_status = "✅ Active" if webhook_info and webhook_info.get('url') else "❌ Not set"
+
         status_text = f"""🟢 Bot đang hoạt động!
 
 ⏰ Thời gian: {current_time}
-🤖 Chatbot: Online
+🤖 Chatbot: Online  
 📱 Telegram: Connected
+🎣 Webhook: {webhook_status}
 {USER_TAG} Status: Active
 
 Nhắn "help" để xem commands!"""
@@ -207,7 +292,7 @@ Nhắn "help" để xem commands!"""
         self.send_message(status_text)
 
     def handle_message(self, message):
-        """Handle incoming message"""
+        """Handle incoming message from webhook"""
         try:
             text = message.get('text', '')
             user = message.get('from', {})
@@ -215,13 +300,13 @@ Nhắn "help" để xem commands!"""
 
             username = user.get('username', user.get('first_name', 'Unknown'))
 
-            print(f"📨 Message from {username}: {text}")
+            print(f"🎣 Webhook message from {username}: {text}")
 
             # Classify and respond
             command = self.classify_message(text)
 
             if command == 'bus':
-                # Run in background thread to avoid blocking
+                # Run in background thread to avoid blocking webhook response
                 threading.Thread(target=self.run_bus_bot, daemon=True).start()
 
             elif command == 'gold':
@@ -244,75 +329,206 @@ Nhắn "help" để xem commands!"""
                 self.send_message(f"🤔 Không hiểu '{text}'\n\nNhắn 'help' để xem các commands có sẵn!")
 
         except Exception as e:
-            print(f"Error handling message: {e}")
+            print(f"Error handling webhook message: {e}")
             self.send_message("❌ Có lỗi xảy ra khi xử lý tin nhắn")
 
-    def start_polling(self):
-        """Start bot polling loop"""
-        print("🤖 Starting Telegram chatbot...")
-        print(f"Bot token: {self.bot_token[:10]}..." if self.bot_token else "❌ No bot token")
-        print(f"Chat ID: {self.chat_id}")
 
-        if not self.bot_token or not self.chat_id:
-            print("❌ Missing BOT_TOKEN or CHAT_ID")
-            return
+# Global bot instance
+bot_instance = TelegramChatBot()
 
+
+# Flask routes
+@app.route('/')
+def home():
+    """Health check endpoint"""
+    return {
+        'status': 'Bot is running',
+        'mode': 'webhook',
+        'timestamp': datetime.now().isoformat()
+    }
+
+
+@app.route('/telegram-webhook', methods=['POST'])
+def telegram_webhook():
+    """Nhận webhook từ Telegram"""
+    try:
+        # Verify request đến từ Telegram
+        if not bot_instance.verify_webhook_signature(request):
+            print("⚠️ Invalid webhook signature")
+            return 'Unauthorized', 401
+
+        # Parse webhook data
+        update = request.get_json()
+
+        if not update:
+            print("⚠️ Empty webhook data")
+            return 'Bad Request', 400
+
+        print(f"🎣 Webhook received: {update.get('update_id')}")
+
+        # Handle message
+        if 'message' in update:
+            bot_instance.handle_message(update['message'])
+
+        # Telegram expects quick response
+        return 'OK', 200
+
+    except Exception as e:
+        print(f"❌ Webhook error: {e}")
+        return 'Internal Server Error', 500
+
+
+@app.route('/webhook/setup', methods=['POST'])
+def setup_webhook():
+    """Endpoint để setup webhook"""
+    try:
+        if bot_instance.set_webhook():
+            return {'status': 'success', 'message': 'Webhook set successfully'}
+        else:
+            return {'status': 'error', 'message': 'Failed to set webhook'}, 500
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}, 500
+
+
+@app.route('/webhook/delete', methods=['POST'])
+def delete_webhook():
+    """Endpoint để xóa webhook"""
+    try:
+        if bot_instance.delete_webhook():
+            return {'status': 'success', 'message': 'Webhook deleted successfully'}
+        else:
+            return {'status': 'error', 'message': 'Failed to delete webhook'}, 500
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}, 500
+
+
+@app.route('/webhook/info', methods=['GET'])
+def webhook_info():
+    """Endpoint để kiểm tra webhook info"""
+    try:
+        info = bot_instance.get_webhook_info()
+        return {'status': 'success', 'webhook_info': info}
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}, 500
+
+
+@app.route('/send-test', methods=['POST'])
+def send_test_message():
+    """Endpoint để test gửi tin nhắn"""
+    try:
+        data = request.get_json()
+        message = data.get('message', 'Test message from webhook bot!')
+
+        if bot_instance.send_message(message):
+            return {'status': 'success', 'message': 'Test message sent'}
+        else:
+            return {'status': 'error', 'message': 'Failed to send message'}, 500
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}, 500
+
+
+def start_webhook_server():
+    """Start webhook server"""
+    print("🎣 Starting Telegram Webhook Bot...")
+    print(f"Bot token: {BOT_TOKEN[:10]}..." if BOT_TOKEN else "❌ No bot token")
+    print(f"Chat ID: {CHAT_ID}")
+    print(f"Webhook URL: {WEBHOOK_URL}")
+
+    if not BOT_TOKEN or not CHAT_ID:
+        print("❌ Missing BOT_TOKEN or CHAT_ID")
+        return
+
+    if not WEBHOOK_URL:
+        print("❌ Missing WEBHOOK_URL - required for webhook mode")
+        print("💡 Set WEBHOOK_URL in .env file: https://yourserver.com/telegram-webhook")
+        return
+
+    # Setup webhook
+    if bot_instance.set_webhook():
         # Send startup message
-        self.send_message(f"🤖 Chatbot started! {USER_TAG}\n\nNhắn 'help' để xem commands.")
+        bot_instance.send_message(
+            f"🎣 Webhook Bot started! {USER_TAG}\n\nMode: Realtime Webhook\nNhắn 'help' để xem commands.")
 
-        self.running = True
-        error_count = 0
-        max_errors = 5
+        # Start Flask server
+        port = int(os.getenv('PORT', 5000))
+        app.run(host='0.0.0.0', port=port, debug=False)
+    else:
+        print("❌ Failed to setup webhook")
 
-        while self.running:
-            try:
-                # Get updates
-                updates_data = self.get_updates()
 
-                if updates_data and updates_data.get('ok'):
+def start_polling_fallback():
+    """Fallback to polling mode if webhook fails"""
+    print("🔄 Falling back to polling mode...")
+
+    # Delete any existing webhook first
+    bot_instance.delete_webhook()
+    time.sleep(2)
+
+    # Start polling (old method)
+    bot_instance.running = True
+    error_count = 0
+    max_errors = 5
+
+    while bot_instance.running:
+        try:
+            # Get updates (polling method)
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+            params = {
+                'offset': bot_instance.last_update_id + 1,
+                'timeout': 10
+            }
+
+            response = requests.get(url, params=params, timeout=15)
+            if response.status_code == 200:
+                updates_data = response.json()
+
+                if updates_data.get('ok'):
                     updates = updates_data.get('result', [])
 
                     for update in updates:
-                        self.last_update_id = update['update_id']
+                        bot_instance.last_update_id = update['update_id']
 
                         if 'message' in update:
-                            self.handle_message(update['message'])
+                            bot_instance.handle_message(update['message'])
 
-                # Reset error count on success
-                error_count = 0
-                time.sleep(1)  # Small delay to avoid rate limiting
+            # Reset error count on success
+            error_count = 0
+            time.sleep(1)
 
-            except KeyboardInterrupt:
-                print("\n🛑 Stopping chatbot...")
-                self.running = False
-                self.send_message("🛑 Chatbot stopped")
+        except KeyboardInterrupt:
+            print("\n🛑 Stopping chatbot...")
+            bot_instance.running = False
+            bot_instance.send_message("🛑 Chatbot stopped")
 
-            except Exception as e:
-                error_count += 1
-                print(f"❌ Error in polling loop: {e} (attempt {error_count}/{max_errors})")
+        except Exception as e:
+            error_count += 1
+            print(f"❌ Error in polling: {e} (attempt {error_count}/{max_errors})")
 
-                if error_count >= max_errors:
-                    print("💀 Too many errors, stopping bot")
-                    self.send_message("❌ Bot gặp lỗi quá nhiều, tạm dừng hoạt động")
-                    break
+            if error_count >= max_errors:
+                print("💀 Too many errors, stopping bot")
+                break
 
-                time.sleep(5)  # Wait before retry
-
-    def stop(self):
-        """Stop the bot"""
-        self.running = False
+            time.sleep(5)
 
 
 def main():
-    """Main function"""
-    bot = TelegramChatBot()
+    """Main function - Auto choose webhook or polling"""
+    mode = os.getenv('BOT_MODE', 'auto').lower()
 
-    try:
-        bot.start_polling()
-    except KeyboardInterrupt:
-        print("\nStopping...")
-    finally:
-        bot.stop()
+    if mode == 'polling':
+        print("🔄 Force polling mode")
+        start_polling_fallback()
+    elif mode == 'webhook' or (mode == 'auto' and WEBHOOK_URL):
+        print("🎣 Using webhook mode")
+        try:
+            start_webhook_server()
+        except Exception as e:
+            print(f"❌ Webhook failed: {e}")
+            print("🔄 Falling back to polling...")
+            start_polling_fallback()
+    else:
+        print("🔄 Using polling mode (no webhook URL)")
+        start_polling_fallback()
 
 
 if __name__ == "__main__":

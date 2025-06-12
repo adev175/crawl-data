@@ -1,4 +1,4 @@
-# crawler/crawler_gold_enhanced.py
+# crawler/crawler_gold.py
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone

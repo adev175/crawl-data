@@ -8,37 +8,57 @@ from crawler.crawler_ai_news import run_ai_bot
 from crawler.crawler_bus_price import BusPriceTracker
 from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
 
-
 def run_gold_bot():
-    """Run gold price bot with GitHub Actions support"""
+    """Run gold price bot with enhanced error handling"""
     print("Starting gold price bot...")
 
-    # Check if running in GitHub Actions
-    if is_github_actions():
-        print("Using enhanced fetcher for GitHub Actions...")
-        try:
-            from crawler.crawler_gold_enhanced import main as enhanced_gold_main
-            enhanced_gold_main()
-            return
-        except ImportError:
-            print("Enhanced gold crawler not found, using standard version...")
-
-    # Fallback to standard version
     try:
-        from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
+        from crawler.crawler_gold import fetch_gold_prices, send_to_telegram
+        import os
 
-        buy_trend, data = fetch_gold_prices()
+        result = fetch_gold_prices()
+
+        # Handle both old (2 values) and new (3 values) return formats
+        if len(result) == 3:
+            buy_trend, data, source_name = result
+            print(f"✅ Enhanced version - Source: {source_name}")
+        elif len(result) == 2:
+            buy_trend, data = result
+            source_name = "Unknown"
+            print("✅ Standard version")
+        else:
+            raise ValueError(f"Unexpected return format: {len(result)} values")
+
         if data:
-            send_to_telegram(format_as_code_block(data))
+            # Send formatted message (handle potential format_as_code_block parameter mismatch)
+            try:
+                from crawler.crawler_gold import format_as_code_block
+                # Try with source_name parameter first
+                formatted_msg = format_as_code_block(data, source_name)
+            except TypeError:
+                # Fallback to version without source_name
+                formatted_msg = format_as_code_block(data)
+
+            send_to_telegram(formatted_msg)
+
+            # Send trend message
             user_tag = os.getenv('USER_TAG', '')
             if buy_trend == 'increase':
                 send_to_telegram(f"Có nên mua vàng không má {user_tag} 🤔🤔🤔", parse_mode=None)
             elif buy_trend == 'decrease':
                 send_to_telegram(f"✅ Mua vàng đi má {user_tag} 🧀🧀🧀", parse_mode=None)
+            else:
+                send_to_telegram(f"📊 Giá vàng cập nhật từ {source_name}", parse_mode=None)
         else:
-            print("No gold data retrieved")
+            send_to_telegram("❌ Không thể lấy giá vàng", parse_mode=None)
+
     except Exception as e:
         print(f"Gold bot error: {e}")
+        try:
+            from services.telegram_bot import send_to_telegram
+            send_to_telegram(f"❌ Lỗi gold bot: {str(e)[:100]}...", parse_mode=None)
+        except:
+            pass
 
     print("Gold price bot finished.")
 

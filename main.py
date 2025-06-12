@@ -44,10 +44,31 @@ def run_gold_bot():
 
 
 def run_bus_bot():
-    """Run bus price bot"""
+    """Run bus price bot with fallback support"""
     print("Starting bus price bot...")
-    tracker = BusPriceTracker()
-    tracker.run()
+
+    try:
+        # Try stable version first
+        from crawler.stable_bus_crawler import StableBusPriceTracker
+        tracker = StableBusPriceTracker()
+        success = tracker.run()
+
+        if not success:
+            print("⚠️ Stable tracker failed, trying original version...")
+            # Fallback to original
+            from crawler.crawler_bus_price_complete import BusPriceTracker
+            original_tracker = BusPriceTracker()
+            original_tracker.run()
+
+    except Exception as e:
+        print(f"❌ All bus tracking methods failed: {e}")
+        # Send error notification
+        try:
+            from services.telegram_bot import send_to_telegram
+            send_to_telegram(f"❌ Bus bot error: {str(e)[:100]}...", parse_mode=None)
+        except:
+            pass
+
     print("Bus price bot finished.")
 
 
@@ -194,7 +215,7 @@ def main():
     while True:
         try:
             show_menu()
-            choice = input("Select option (1-7): ").strip()
+            choice = input("Select option (1-9): ").strip()  # Fixed: was (1-7)
 
             if choice == "1":
                 run_ai_bot()

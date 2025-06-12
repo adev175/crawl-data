@@ -14,7 +14,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 from services.telegram_bot import send_to_telegram
 
 
-class BusPriceTracker:
+class StableBusPriceTracker:
     def __init__(self):
         self.db_file = "bus_prices.db"
         self.init_database()
@@ -370,9 +370,9 @@ class BusPriceTracker:
             message += f"💰 Giá thấp nhất tuần này: ¥{lowest_week_price:,}\n\n"
 
             if prices_data:
-                message += "📅 Giá 1 tuần gần nhất:\n"
-                # Sort dates and take only the most recent 7 entries
-                sorted_dates = sorted(prices_data.items(), key=lambda x: x[0], reverse=True)[:7]
+                message += "📅 Giá 2 tuần gần nhất:\n"
+                # Sort dates and take only the most recent 14 entries
+                sorted_dates = sorted(prices_data.items(), key=lambda x: x[0], reverse=True)[:14]
                 for date_str, price in sorted_dates:
                     try:
                         date_obj = datetime.strptime(date_str, "%Y-%m-%d")
@@ -448,7 +448,7 @@ class BusPriceTracker:
 
 def main():
     """Main function"""
-    tracker = BusPriceTracker()
+    tracker = StableBusPriceTracker()
     return tracker.run()
 
 

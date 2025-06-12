@@ -17,16 +17,6 @@ class GoldPriceService(BaseService):
         try:
             import os
 
-            # Try enhanced version for GitHub Actions
-            if os.getenv('GITHUB_ACTIONS') == 'true':
-                try:
-                    from crawler.crawler_gold_enhanced import main as enhanced_gold_main
-                    enhanced_gold_main()
-                    return True
-                except ImportError:
-                    pass
-
-            # Fallback to standard version
             from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
             buy_trend, data = fetch_gold_prices()
 

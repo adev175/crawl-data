@@ -17,7 +17,7 @@ def run_gold_bot():
     if is_github_actions():
         print("Using enhanced fetcher for GitHub Actions...")
         try:
-            from crawler.crawler_gold_enhanced import main as enhanced_gold_main
+            from crawler.crawler_gold import main as enhanced_gold_main
             enhanced_gold_main()
             return
         except ImportError:
@@ -27,21 +27,46 @@ def run_gold_bot():
     try:
         from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
 
-        buy_trend, data = fetch_gold_prices()
+        # Fix: Handle the correct number of return values
+        result = fetch_gold_prices()
+        print(len(result), "values returned from fetch_gold_prices")
+
+        # Check if result has 2 or 3 values
+        if len(result) == 3:
+            buy_trend, data, source_name = result
+            print(f"✅ Data retrieved from source: {source_name}")
+        else:
+            buy_trend, data = result
+            source_name = "Unknown"
+
         if data:
-            send_to_telegram(format_as_code_block(data))
+            # Use source_name if available
+            if 'source_name' in locals():
+                send_to_telegram(format_as_code_block(data, source_name))
+            else:
+                send_to_telegram(format_as_code_block(data))
+
             user_tag = os.getenv('USER_TAG', '')
             if buy_trend == 'increase':
                 send_to_telegram(f"Có nên mua vàng không má {user_tag} 🤔🤔🤔", parse_mode=None)
             elif buy_trend == 'decrease':
                 send_to_telegram(f"✅ Mua vàng đi má {user_tag} 🧀🧀🧀", parse_mode=None)
+            else:
+                send_to_telegram(f"📊 Giá vàng cập nhật thành công!", parse_mode=None)
         else:
             print("No gold data retrieved")
+            send_to_telegram("❌ Không thể lấy giá vàng hôm nay", parse_mode=None)
+
     except Exception as e:
         print(f"Gold bot error: {e}")
+        # Send error notification
+        try:
+            from services.telegram_bot import send_to_telegram
+            send_to_telegram(f"❌ Lỗi gold bot: {str(e)[:100]}...", parse_mode=None)
+        except:
+            pass
 
     print("Gold price bot finished.")
-
 
 def run_bus_bot():
     """Run bus price bot with fallback support"""

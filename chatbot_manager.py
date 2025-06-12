@@ -202,7 +202,7 @@ Users just need to send any of these keywords to the bot!
         try:
             if choice == "1":
                 print("🤖 Running AI News Bot...")
-                from crawler.crawl_ai_news import run_ai_bot
+                from crawler.crawler_ai_news import run_ai_bot
                 run_ai_bot()
                 print("✅ AI News Bot completed")
 

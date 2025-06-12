@@ -4,8 +4,8 @@ import os
 from datetime import datetime
 
 # Import all bot modules
-from crawler.crawl_ai_news import run_ai_bot
-from crawler.crawler_bus_price_complete import BusPriceTracker
+from crawler.crawler_ai_news import run_ai_bot
+from crawler.crawler_bus_price import BusPriceTracker
 from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
 
 
@@ -56,7 +56,7 @@ def run_bus_bot():
         if not success:
             print("⚠️ Stable tracker failed, trying original version...")
             # Fallback to original
-            from crawler.crawler_bus_price_complete import BusPriceTracker
+            from crawler.crawler_bus_price import BusPriceTracker
             original_tracker = BusPriceTracker()
             original_tracker.run()
 

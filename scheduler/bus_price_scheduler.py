@@ -9,7 +9,7 @@ import os
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from crawler.crawler_bus_price_complete import BusPriceTracker
+from crawler.crawler_bus_price import BusPriceTracker
 from services.telegram_bot import send_to_telegram
 
 # Setup logging

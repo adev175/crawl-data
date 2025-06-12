@@ -26,7 +26,7 @@ class BusPriceService(BaseService):
                 pass
 
             # Fallback to original version
-            from crawler.crawler_bus_price_complete import BusPriceTracker
+            from crawler.crawler_bus_price import BusPriceTracker
             tracker = BusPriceTracker()
             tracker.run()
             return True

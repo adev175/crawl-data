@@ -1,6 +1,10 @@
+# Existing dependencies
 requests
 beautifulsoup4
 python-dotenv==1.0.1
 selenium>=4.15.0
 webdriver-manager==4.0.1
 schedule
+
+# New for Notion KMS
+notion-client>=2.0.0

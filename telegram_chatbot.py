@@ -315,6 +315,116 @@ class TelegramChatBot:
         self.running = False
 
 
+# Add to existing telegram_chatbot.py - Enhanced message handling for KMS
+
+def handle_message(self, message):
+    """Enhanced handle_message with KMS support"""
+    try:
+        text = message.get('text', '')
+        user = message.get('from', {})
+        username = user.get('username', user.get('first_name', 'Unknown'))
+
+        print(f"📨 Message from {username}: {text}")
+
+        # Parse KMS commands specifically
+        if self.is_kms_command(text):
+            self.handle_kms_command(text)
+            return
+
+        # Existing classification logic
+        action_type, action_value = self.classify_message(text)
+
+        if action_type == 'system':
+            if action_value == 'help':
+                self.show_help()
+            elif action_value == 'status':
+                self.show_status()
+            elif action_value == 'list':
+                self.list_services()
+            elif action_value == 'all':
+                threading.Thread(target=self.execute_all_services, daemon=True).start()
+
+        elif action_type == 'service':
+            threading.Thread(target=self.execute_service, args=(action_value,), daemon=True).start()
+
+        else:
+            # Existing fallback logic
+            suggestions = []
+            for service in list(self.service_registry.get_all_services().values())[:3]:
+                config = service.get_config()
+                suggestions.extend(config.keywords[:2])
+
+            suggestion_text = ', '.join([f"`{s}`" for s in suggestions])
+
+            self.send_message(
+                f"🤔 Không hiểu '{text}'\n\n💡 **Thử:** {suggestion_text}\n\n❓ Hoặc gõ `help` để xem tất cả commands",
+                parse_mode="Markdown"
+            )
+
+    except Exception as e:
+        print(f"Error handling message: {e}")
+        self.send_message("❌ Có lỗi xảy ra khi xử lý tin nhắn")
+
+
+def is_kms_command(self, text):
+    """Check if message is a KMS command"""
+    text_lower = text.lower().strip()
+    kms_patterns = [
+        'kms search',
+        'kms recent',
+        'kms stats',
+        'kms categories',
+        'kms create'
+    ]
+
+    return any(pattern in text_lower for pattern in kms_patterns)
+
+
+def handle_kms_command(self, text):
+    """Handle KMS-specific commands"""
+    try:
+        from services.notion_kms_service import NotionKMSService
+
+        kms_service = NotionKMSService()
+        if not kms_service.notion:
+            self.send_message("❌ Notion KMS not configured", parse_mode=None)
+            return
+
+        text_lower = text.lower().strip()
+
+        if text_lower.startswith('kms search '):
+            # Extract search query
+            query = text[11:].strip()  # Remove 'kms search '
+            if query:
+                self.send_message(f"🔍 Searching for '{query}'...", parse_mode=None)
+                threading.Thread(target=kms_service.search_knowledge, args=(query,), daemon=True).start()
+            else:
+                self.send_message("❌ Please provide search query. Example: `kms search machine learning`",
+                                  parse_mode="Markdown")
+
+        elif text_lower == 'kms recent':
+            self.send_message("📖 Getting recent notes...", parse_mode=None)
+            threading.Thread(target=kms_service.get_recent_notes, daemon=True).start()
+
+        elif text_lower == 'kms stats':
+            self.send_message("📊 Calculating statistics...", parse_mode=None)
+            threading.Thread(target=kms_service.get_database_stats, daemon=True).start()
+
+        elif text_lower == 'kms categories':
+            self.send_message("📁 Loading categories...", parse_mode=None)
+            threading.Thread(target=kms_service.browse_categories, daemon=True).start()
+
+        elif text_lower == 'kms create':
+            self.send_message("📝 Note creation feature coming soon!", parse_mode=None)
+
+        else:
+            # Show KMS menu
+            kms_service.execute()
+
+    except Exception as e:
+        print(f"KMS command error: {e}")
+        self.send_message(f"❌ KMS command failed: {str(e)}", parse_mode=None)
+
 def main():
     """Main function"""
     bot = TelegramChatBot()

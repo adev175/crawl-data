@@ -23,13 +23,12 @@ def run_gold_bot():
         except ImportError:
             print("Enhanced gold crawler not found, using standard version...")
 
-    # Fallback to standard version
+    # Standard version
     try:
         from crawler.crawler_gold import fetch_gold_prices, format_as_code_block, send_to_telegram
 
-        # Fix: Handle the correct number of return values
+        # Handle the return values properly
         result = fetch_gold_prices()
-        print(len(result), "values returned from fetch_gold_prices")
 
         # Check if result has 2 or 3 values
         if len(result) == 3:
@@ -37,14 +36,20 @@ def run_gold_bot():
             print(f"✅ Data retrieved from source: {source_name}")
         else:
             buy_trend, data = result
-            source_name = "Unknown"
+            source_name = None
 
         if data:
-            # Use source_name if available
-            if 'source_name' in locals():
-                send_to_telegram(format_as_code_block(data, source_name))
-            else:
+            # Try to use the enhanced format function first
+            try:
+                if source_name:
+                    send_to_telegram(format_as_code_block(data, source_name))
+                else:
+                    send_to_telegram(format_as_code_block(data))
+            except TypeError:
+                # Fallback: format_as_code_block only accepts 1 argument
                 send_to_telegram(format_as_code_block(data))
+                if source_name:
+                    send_to_telegram(f"📊 Nguồn: {source_name}", parse_mode=None)
 
             user_tag = os.getenv('USER_TAG', '')
             if buy_trend == 'increase':

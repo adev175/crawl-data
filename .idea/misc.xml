@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="crawl-price-gold" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="crawl-price-gold" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="bus_scraper_env" project-jdk-type="Python SDK" />
 </project>

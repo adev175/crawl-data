@@ -1,4 +1,4 @@
-# main.py - Updated for GitHub Actions
+# main.py - Updated for GitHub Actions with KMS Support
 import sys
 import os
 from datetime import datetime
@@ -73,6 +73,7 @@ def run_gold_bot():
 
     print("Gold price bot finished.")
 
+
 def run_bus_bot():
     """Run bus price bot with fallback support"""
     print("Starting bus price bot...")
@@ -102,6 +103,30 @@ def run_bus_bot():
     print("Bus price bot finished.")
 
 
+def run_kms_bot():
+    """Run KMS bot"""
+    print("Starting KMS bot...")
+
+    try:
+        from services.notion_kms_service import NotionKMSService
+        kms_service = NotionKMSService()
+
+        if kms_service.execute():
+            print("✅ KMS Bot completed successfully")
+        else:
+            print("❌ KMS Bot completed with errors")
+
+    except Exception as e:
+        print(f"❌ KMS bot error: {e}")
+        try:
+            from services.telegram_bot import send_to_telegram
+            send_to_telegram(f"❌ Lỗi KMS bot: {str(e)[:100]}...", parse_mode=None)
+        except:
+            pass
+
+    print("KMS bot finished.")
+
+
 def is_github_actions():
     """Check if running in GitHub Actions"""
     return os.getenv('GITHUB_ACTIONS') == 'true'
@@ -123,12 +148,13 @@ def show_menu():
     print("1. Run AI News Bot")
     print("2. Run Gold Price Bot")
     print("3. Run Bus Price Bot")
-    print("4. Run All Bots")
-    print("5. View Bus Price Database")
-    print("6. Schedule Bus Price Monitoring")
-    print("7. Start Interactive Chatbot")
-    print("8. Chatbot Manager")
-    print("9. Exit")
+    print("4. Run KMS Bot")
+    print("5. Run All Bots")
+    print("6. View Bus Price Database")
+    print("7. Schedule Bus Price Monitoring")
+    print("8. Start Interactive Chatbot")
+    print("9. Chatbot Manager")
+    print("10. Exit")
     print("-" * 50)
 
 
@@ -186,11 +212,14 @@ def main():
                 run_gold_bot()
             elif command == "bus":
                 run_bus_bot()
+            elif command == "kms":
+                run_kms_bot()
             elif command == "all":
                 print("=== Running all bots ===")
                 run_ai_bot()
                 run_gold_bot()
                 run_bus_bot()
+                run_kms_bot()
             elif command == "schedule":
                 start_bus_scheduler()
             elif command == "db":
@@ -205,6 +234,7 @@ def main():
                 print("  python main.py ai        # Run AI news bot")
                 print("  python main.py gold      # Run gold price bot")
                 print("  python main.py bus       # Run bus price bot")
+                print("  python main.py kms       # Run KMS bot")
                 print("  python main.py all       # Run all bots")
                 print("  python main.py schedule  # Start bus price scheduler")
                 print("  python main.py db        # View bus database")
@@ -238,6 +268,12 @@ def main():
         except Exception as e:
             print(f"❌ Bus Price Bot failed: {e}")
 
+        try:
+            run_kms_bot()
+            print("✅ KMS Bot completed")
+        except Exception as e:
+            print(f"❌ KMS Bot failed: {e}")
+
         print("=== Execution completed ===")
         return
 
@@ -245,7 +281,7 @@ def main():
     while True:
         try:
             show_menu()
-            choice = input("Select option (1-9): ").strip()  # Fixed: was (1-7)
+            choice = input("Select option (1-10): ").strip()
 
             if choice == "1":
                 run_ai_bot()
@@ -257,6 +293,9 @@ def main():
                 run_bus_bot()
 
             elif choice == "4":
+                run_kms_bot()
+
+            elif choice == "5":
                 print("\n=== Running All Bots ===")
                 try:
                     run_ai_bot()
@@ -276,15 +315,21 @@ def main():
                 except Exception as e:
                     print(f"❌ Bus Price Bot failed: {e}")
 
+                try:
+                    run_kms_bot()
+                    print("✅ KMS Bot completed")
+                except Exception as e:
+                    print(f"❌ KMS Bot failed: {e}")
+
                 print("=== All bots execution completed ===")
 
-            elif choice == "5":
+            elif choice == "6":
                 view_bus_database()
 
-            elif choice == "6":
+            elif choice == "7":
                 start_bus_scheduler()
 
-            elif choice == "7":
+            elif choice == "8":
                 # Start interactive chatbot
                 try:
                     from telegram_chatbot import TelegramChatBot
@@ -299,7 +344,7 @@ def main():
                 except Exception as e:
                     print(f"❌ Chatbot error: {e}")
 
-            elif choice == "8":
+            elif choice == "9":
                 # Chatbot manager
                 try:
                     from chatbot_manager import ChatbotManager
@@ -308,12 +353,12 @@ def main():
                 except Exception as e:
                     print(f"❌ Chatbot manager error: {e}")
 
-            elif choice == "9":
+            elif choice == "10":
                 print("👋 Goodbye!")
                 break
 
             else:
-                print("❌ Invalid option! Please select 1-9.")
+                print("❌ Invalid option! Please select 1-10.")
 
             input("\nPress Enter to continue...")
 

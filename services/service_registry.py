@@ -88,11 +88,13 @@ class ServiceRegistry:
         from services.ai_news_service import AINewsService
         from services.gold_price_service import GoldPriceService
         from services.bus_price_service import BusPriceService
+        from services.notion_kms_service import NotionKMSService
 
         builtin_services = [
             AINewsService(),
             GoldPriceService(),
-            BusPriceService()
+            BusPriceService(),
+            NotionKMSService()
         ]
 
         for service in builtin_services:

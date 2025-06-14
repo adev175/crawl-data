@@ -23,6 +23,7 @@ class TelegramChatBot:
         self.running = False
 
         # Bot commands and keywords
+        # Bot commands and keywords
         self.commands = {
             # Bus related
             'bus': ['bus', 'xe', 'xe buýt', 'bus time', 'bus price', 'giá xe'],
@@ -32,6 +33,9 @@ class TelegramChatBot:
 
             # AI News related
             'ai': ['ai', 'ai news', 'tin ai', 'news', 'tin tức', 'tech news'],
+
+            # ADD KMS related
+            'kms': ['kms', 'knowledge', 'notion', 'note', 'search', 'notes'],
 
             # Help and status
             'help': ['help', 'trợ giúp', 'commands', 'menu', '/start', '/help'],
@@ -145,6 +149,35 @@ class TelegramChatBot:
             self.send_message(error_msg)
             print(error_msg)
 
+    def run_kms_bot(self):
+        """Run KMS bot"""
+        try:
+            self.send_message("🧠 Đang khởi động Notion KMS... Vui lòng đợi!")
+
+            from services.notion_kms_serivce import NotionKMSService
+            kms_service = NotionKMSService()
+            kms_service.execute()
+
+            print("✅ KMS bot completed")
+        except Exception as e:
+            error_msg = f"❌ Lỗi khi chạy KMS bot: {str(e)}"
+            self.send_message(error_msg)
+            print(error_msg)
+
+    def is_kms_command(self, text):
+        """Check if message is a KMS command"""
+        text_lower = text.lower().strip()
+        kms_patterns = [
+            'kms search',
+            'kms recent',
+            'kms stats',
+            'kms categories',
+            'kms create'
+        ]
+
+        return any(pattern in text_lower for pattern in kms_patterns)
+
+
     def run_all_bots(self):
         """Run all bots sequentially"""
         try:
@@ -168,28 +201,35 @@ class TelegramChatBot:
         """Show help message with available commands"""
         help_text = f"""🤖 Chatbot Commands:
 
-🚌 **Bus Commands:**
-• "bus" / "xe" / "bus time" / "giá xe"
-→ Kiểm tra giá xe bus Nagaoka → Shinjuku
+    🚌 **Bus Commands:**
+    • "bus" / "xe" / "bus time" / "giá xe"
+    → Kiểm tra giá xe bus Nagaoka → Shinjuku
 
-🪙 **Gold Commands:**  
-• "gold" / "vàng" / "giá vàng"
-→ Kiểm tra giá vàng hôm nay
+    🪙 **Gold Commands:**  
+    • "gold" / "vàng" / "giá vàng"
+    → Kiểm tra giá vàng hôm nay
 
-🤖 **AI News Commands:**
-• "ai" / "news" / "tin ai" / "tin tức"  
-→ Tin tức AI mới nhất từ CNBC
+    🤖 **AI News Commands:**
+    • "ai" / "news" / "tin ai" / "tin tức"  
+    → Tin tức AI mới nhất từ CNBC
 
-🚀 **Other Commands:**
-• "all" / "tất cả" → Chạy tất cả bots
-• "status" / "ping" → Kiểm tra bot có hoạt động
-• "help" / "trợ giúp" → Hiển thị menu này
+    🧠 **Knowledge Management:**
+    • "kms" / "knowledge" / "notion"
+    → Notion Knowledge Management System
+    • "kms search [query]" → Tìm kiếm knowledge base
+    • "kms recent" → Xem notes gần đây
+    • "kms stats" → Thống kê database
 
-💬 **Cách sử dụng:**
-Chỉ cần nhắn một trong các từ khóa trên!
+    🚀 **Other Commands:**
+    • "all" / "tất cả" → Chạy tất cả bots
+    • "status" / "ping" → Kiểm tra bot có hoạt động
+    • "help" / "trợ giúp" → Hiển thị menu này
 
-VD: "bus time" → Bot sẽ tự động check giá xe
-"""
+    💬 **Cách sử dụng:**
+    Chỉ cần nhắn một trong các từ khóa trên!
+
+    VD: "kms search python" → Tìm kiếm về Python
+    """
         self.send_message(help_text)
 
     def show_status(self):
@@ -219,6 +259,8 @@ Nhắn "help" để xem commands!"""
 
             # Classify and respond
             command = self.classify_message(text)
+            # Classify and respond
+            command = self.classify_message(text)
 
             if command == 'bus':
                 # Run in background thread to avoid blocking
@@ -230,6 +272,10 @@ Nhắn "help" để xem commands!"""
             elif command == 'ai':
                 threading.Thread(target=self.run_ai_bot, daemon=True).start()
 
+            # ADD THIS BLOCK
+            elif command == 'kms':
+                threading.Thread(target=self.run_kms_bot, daemon=True).start()
+
             elif command == 'all':
                 threading.Thread(target=self.run_all_bots, daemon=True).start()
 
@@ -240,8 +286,12 @@ Nhắn "help" để xem commands!"""
                 self.show_help()
 
             else:
-                # Unrecognized command
-                self.send_message(f"🤔 Không hiểu '{text}'\n\nNhắn 'help' để xem các commands có sẵn!")
+                # Check for specific KMS commands
+                if self.is_kms_command(text):
+                    self.handle_kms_command(text)
+                else:
+                    # Unrecognized command
+                    self.send_message(f"🤔 Không hiểu '{text}'\n\nNhắn 'help' để xem các commands có sẵn!")
 
         except Exception as e:
             print(f"Error handling message: {e}")

@@ -126,6 +126,28 @@ def run_kms_bot():
 
     print("KMS bot finished.")
 
+def run_event_bot():
+    """Run event checker bot"""
+    print("Starting event checker bot...")
+
+    try:
+        from services.event_checker_service import EventCheckerService
+        event_service = EventCheckerService()
+
+        if event_service.execute():
+            print("✅ Event Checker Bot completed successfully")
+        else:
+            print("❌ Event Checker Bot completed with errors")
+
+    except Exception as e:
+        print(f"❌ Event Checker bot error: {e}")
+        try:
+            from services.telegram_bot import send_to_telegram
+            send_to_telegram(f"❌ Lỗi Event bot: {str(e)[:100]}...", parse_mode=None)
+        except:
+            pass
+
+    print("Event Checker bot finished.")
 
 def is_github_actions():
     """Check if running in GitHub Actions"""
@@ -149,12 +171,13 @@ def show_menu():
     print("2. Run Gold Price Bot")
     print("3. Run Bus Price Bot")
     print("4. Run KMS Bot")
-    print("5. Run All Bots")
-    print("6. View Bus Price Database")
-    print("7. Schedule Bus Price Monitoring")
-    print("8. Start Interactive Chatbot")
-    print("9. Chatbot Manager")
-    print("10. Exit")
+    print("5. Run Event Checker Bot")  # Add this line
+    print("6. Run All Bots")           # Update numbering
+    print("7. View Bus Price Database") # Update numbering
+    print("8. Schedule Bus Price Monitoring") # Update numbering
+    print("9. Start Interactive Chatbot")     # Update numbering
+    print("10. Chatbot Manager")              # Update numbering
+    print("11. Exit")                         # Update numbering
     print("-" * 50)
 
 
@@ -214,12 +237,15 @@ def main():
                 run_bus_bot()
             elif command == "kms":
                 run_kms_bot()
+            elif command == "events":
+                run_event_bot()
             elif command == "all":
                 print("=== Running all bots ===")
                 run_ai_bot()
                 run_gold_bot()
                 run_bus_bot()
                 run_kms_bot()
+                run_event_bot()
             elif command == "schedule":
                 start_bus_scheduler()
             elif command == "db":
@@ -235,6 +261,7 @@ def main():
                 print("  python main.py gold      # Run gold price bot")
                 print("  python main.py bus       # Run bus price bot")
                 print("  python main.py kms       # Run KMS bot")
+                print("  python main.py events    # Run Event Checker bot")
                 print("  python main.py all       # Run all bots")
                 print("  python main.py schedule  # Start bus price scheduler")
                 print("  python main.py db        # View bus database")
@@ -286,16 +313,16 @@ def main():
             if choice == "1":
                 run_ai_bot()
 
-            elif choice == "2":
+            elif choice == "12":
                 run_gold_bot()
 
-            elif choice == "3":
+            elif choice == "13":
                 run_bus_bot()
 
-            elif choice == "4":
+            elif choice == "14":
                 run_kms_bot()
 
-            elif choice == "5":
+            elif choice == "15":
                 print("\n=== Running All Bots ===")
                 try:
                     run_ai_bot()
@@ -322,11 +349,13 @@ def main():
                     print(f"❌ KMS Bot failed: {e}")
 
                 print("=== All bots execution completed ===")
+            elif choice == "16":
+                run_event_bot()
 
-            elif choice == "6":
+            elif choice == "17":
                 view_bus_database()
 
-            elif choice == "7":
+            elif choice == "18":
                 start_bus_scheduler()
 
             elif choice == "8":

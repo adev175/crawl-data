@@ -37,6 +37,9 @@ class TelegramChatBot:
             # ADD KMS related
             'kms': ['kms', 'knowledge', 'notion', 'note', 'search', 'notes'],
 
+            # Events related - ADD THIS
+            'events': ['events', 'event', 'sự kiện', 'su kien', 'イベント', 'event checker'],
+
             # Help and status
             'help': ['help', 'trợ giúp', 'commands', 'menu', '/start', '/help'],
             'status': ['status', 'tình trạng', 'ping', 'alive'],
@@ -104,6 +107,21 @@ class TelegramChatBot:
             print("✅ Bus bot completed")
         except Exception as e:
             error_msg = f"❌ Lỗi khi chạy bus bot: {str(e)}"
+            self.send_message(error_msg)
+            print(error_msg)
+
+    def run_event_bot(self):
+        """Run event checker bot"""
+        try:
+            self.send_message("🎪 Đang kiểm tra sự kiện mới... Vui lòng đợi!")
+
+            from services.event_checker_service import EventCheckerService
+            event_service = EventCheckerService()
+            event_service.execute()
+
+            print("✅ Event bot completed")
+        except Exception as e:
+            error_msg = f"❌ Lỗi khi chạy event bot: {str(e)}"
             self.send_message(error_msg)
             print(error_msg)
 
@@ -219,7 +237,11 @@ class TelegramChatBot:
     • "kms search [query]" → Tìm kiếm knowledge base
     • "kms recent" → Xem notes gần đây
     • "kms stats" → Thống kê database
-
+    
+    🎪 **Event Commands:**  
+    • "events" / "event" / "sự kiện"
+    → Sự kiện mới từ Event Checker
+    
     🚀 **Other Commands:**
     • "all" / "tất cả" → Chạy tất cả bots
     • "status" / "ping" → Kiểm tra bot có hoạt động
@@ -272,6 +294,8 @@ Nhắn "help" để xem commands!"""
             elif command == 'ai':
                 threading.Thread(target=self.run_ai_bot, daemon=True).start()
 
+            elif command == 'events':
+                threading.Thread(target=self.run_event_bot, daemon=True).start()
             # ADD THIS BLOCK
             elif command == 'kms':
                 threading.Thread(target=self.run_kms_bot, daemon=True).start()

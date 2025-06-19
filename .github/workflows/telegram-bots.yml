@@ -40,6 +40,18 @@ jobs:
       run: |
         mkdir -p utils scheduler
 
+    - name: 🎪 Run Event Checker Bot
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        CHAT_ID: ${{ secrets.CHAT_ID }}
+        USER_TAG: ${{ secrets.USER_TAG }}
+      run: |
+        echo "🔄 Running Event Checker Bot..."
+        echo "BOT_TOKEN: ${BOT_TOKEN:0:10}..."
+        echo "CHAT_ID: $CHAT_ID"
+        timeout 300 python main.py events || echo "❌ Event Checker Bot failed or timed out"
+      continue-on-error: true
+
     - name: 🤖 Run AI News Bot
       env:
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}

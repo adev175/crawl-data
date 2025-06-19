@@ -313,16 +313,19 @@ def main():
             if choice == "1":
                 run_ai_bot()
 
-            elif choice == "12":
+            elif choice == "2":
                 run_gold_bot()
 
-            elif choice == "13":
+            elif choice == "3":
                 run_bus_bot()
 
-            elif choice == "14":
+            elif choice == "4":
                 run_kms_bot()
 
-            elif choice == "15":
+            elif choice == "5":
+                run_event_bot()
+
+            elif choice == "6":
                 print("\n=== Running All Bots ===")
                 try:
                     run_ai_bot()
@@ -349,16 +352,15 @@ def main():
                     print(f"❌ KMS Bot failed: {e}")
 
                 print("=== All bots execution completed ===")
-            elif choice == "16":
-                run_event_bot()
 
-            elif choice == "17":
+
+            elif choice == "7":
                 view_bus_database()
 
-            elif choice == "18":
+            elif choice == "8":
                 start_bus_scheduler()
 
-            elif choice == "8":
+            elif choice == "9":
                 # Start interactive chatbot
                 try:
                     from telegram_chatbot import TelegramChatBot
@@ -373,7 +375,7 @@ def main():
                 except Exception as e:
                     print(f"❌ Chatbot error: {e}")
 
-            elif choice == "9":
+            elif choice == "10":
                 # Chatbot manager
                 try:
                     from chatbot_manager import ChatbotManager
@@ -382,7 +384,7 @@ def main():
                 except Exception as e:
                     print(f"❌ Chatbot manager error: {e}")
 
-            elif choice == "10":
+            elif choice == "11":
                 print("👋 Goodbye!")
                 break
 

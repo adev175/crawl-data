@@ -1,4 +1,4 @@
-# crawler/crawler_event_checker.py
+# crawler/event_checker_crawler.py
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -59,7 +59,10 @@ def fetch_events(max_events=10):
 
         print(f"✅ Successfully connected to Event Checker (status: {response.status_code})")
 
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Handle encoding issues properly
+        response.encoding = 'utf-8'
+
+        soup = BeautifulSoup(response.content, 'html.parser', from_encoding='utf-8')
         events = parse_events(soup)
 
         # Limit number of events
@@ -77,129 +80,130 @@ def fetch_events(max_events=10):
 
 
 def parse_events(soup):
-    """Parse events from the webpage"""
+    """Parse events from the webpage - Extract all titles like AI news bot"""
     events = []
 
     try:
-        # Method 1: Look for event list containers
-        event_containers = soup.find_all(['div', 'article', 'section'],
-                                         class_=re.compile(r'event|item|post|entry', re.I))
+        # Method 1: Look for specific title classes (like the h2 you found)
+        title_selectors = [
+            'h2.entry-card-title',
+            'h2[class*="entry-card-title"]',
+            'h2[class*="card-title"]',
+            '.entry-card-title',
+            'h1, h2, h3',  # Fallback to all headings
+        ]
 
-        if not event_containers:
-            # Method 2: Look for common event structures
-            event_containers = soup.find_all(['div', 'li'],
-                                             attrs={'class': re.compile(r'.*')})[:20]
+        found_titles = False
 
-        print(f"Found {len(event_containers)} potential event containers")
+        for selector in title_selectors:
+            title_elements = soup.select(selector)
+            if title_elements:
+                print(f"✅ Found {len(title_elements)} titles with selector: {selector}")
+                found_titles = True
 
-        for container in event_containers:
-            event = extract_event_info(container)
-            if event and event['title'] and event['link']:
-                events.append(event)
-                print(f"✅ Extracted event: {event['title'][:50]}...")
+                for element in title_elements:
+                    title_text = clean_text(element.get_text())
 
-        # Remove duplicates based on title
+                    if title_text and len(title_text) > 5:
+                        # Look for parent element that might have a link
+                        link_elem = element.find_parent('a') or element.find('a')
+                        if not link_elem:
+                            # Look for sibling or nearby elements with links
+                            parent = element.find_parent(['article', 'div'])
+                            if parent:
+                                link_elem = parent.find('a', href=True)
+
+                        event_link = BASE_URL
+                        if link_elem and link_elem.get('href'):
+                            href = link_elem.get('href')
+                            event_link = urljoin(BASE_URL, href) if not href.startswith('http') else href
+
+                        event = {
+                            'title': title_text,
+                            'link': event_link,
+                            'date': '',
+                            'summary': ''
+                        }
+
+                        # Look for date in title or surrounding elements
+                        date_match = re.search(r'([0-9]+月[0-9]+日)', title_text)
+                        if date_match:
+                            event['date'] = date_match.group(1)
+
+                        # Try to get summary from nearby elements
+                        parent = element.find_parent(['article', 'div'])
+                        if parent:
+                            # Look for description elements
+                            desc_elem = parent.find(['p', 'div'],
+                                                    class_=re.compile(r'excerpt|summary|content|desc', re.I))
+                            if desc_elem:
+                                summary_text = clean_text(desc_elem.get_text())
+                                if summary_text and len(summary_text) > 10:
+                                    event['summary'] = summary_text[:150] + "..." if len(
+                                        summary_text) > 150 else summary_text
+
+                        events.append(event)
+                        print(f"✅ Extracted: {event['title'][:50]}...")
+
+                break  # Stop after finding titles with first successful selector
+
+        # Method 2: If no structured titles found, look for all links as fallback
+        if not found_titles:
+            print("📝 No structured titles found, trying link extraction...")
+            links = soup.find_all('a', href=True)
+            print(f"Found {len(links)} total links")
+
+            for link in links:
+                link_text = clean_text(link.get_text())
+                href = link.get('href')
+
+                # Take any substantial link text (no keyword filtering)
+                if link_text and len(link_text) > 10 and href:
+                    event = {
+                        'title': link_text,
+                        'link': urljoin(BASE_URL, href) if not href.startswith('http') else href,
+                        'date': '',
+                        'summary': ''
+                    }
+
+                    # Look for date in link text
+                    date_match = re.search(r'([0-9]+月[0-9]+日)', link_text)
+                    if date_match:
+                        event['date'] = date_match.group(1)
+
+                    events.append(event)
+                    print(f"✅ Link extracted: {event['title'][:50]}...")
+
+        # Remove duplicates and clean up
         seen_titles = set()
         unique_events = []
+
         for event in events:
-            if event['title'] not in seen_titles:
+            title = event['title'].strip()
+
+            # Skip navigation/menu items and duplicates
+            if (title not in seen_titles and
+                    len(title) > 5 and
+                    not any(skip in title.lower() for skip in [
+                        'ホーム', 'メニュー', 'home', 'menu', 'search', '検索',
+                        'about', 'contact', 'privacy', 'サイト', 'ページ'
+                    ])):
                 unique_events.append(event)
-                seen_titles.add(event['title'])
+                seen_titles.add(title)
 
         print(f"✅ Found {len(unique_events)} unique events")
         return unique_events
 
     except Exception as e:
         print(f"❌ Error parsing events: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
-def extract_event_info(container):
-    """Extract event information from a container element"""
-    try:
-        event = {
-            'title': '',
-            'date': '',
-            'time': '',
-            'link': '',
-            'description': '',
-            'location': ''
-        }
-
-        # Extract title
-        title_elem = container.find(['h1', 'h2', 'h3', 'h4', 'a'],
-                                    class_=re.compile(r'title|name|event', re.I))
-        if not title_elem:
-            title_elem = container.find('a')
-        if not title_elem:
-            title_elem = container.find(['h1', 'h2', 'h3', 'h4'])
-
-        if title_elem:
-            event['title'] = clean_text(title_elem.get_text())
-
-        # Extract link
-        link_elem = container.find('a', href=True)
-        if link_elem:
-            href = link_elem.get('href')
-            if href:
-                if href.startswith('http'):
-                    event['link'] = href
-                else:
-                    event['link'] = urljoin(BASE_URL, href)
-
-        # Extract date and time information
-        date_patterns = [
-            r'(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})[日]?',  # 2024年12月25日 or 2024/12/25
-            r'(\d{1,2})[月/-](\d{1,2})[日]?',  # 12月25日 or 12/25
-            r'(\d{1,2})/(\d{1,2})',  # 12/25
-        ]
-
-        time_patterns = [
-            r'(\d{1,2}):(\d{2})',  # 14:30
-            r'(\d{1,2})時(\d{2})?分?',  # 14時30分 or 14時
-        ]
-
-        # Search for date/time in text content
-        text_content = container.get_text()
-
-        for pattern in date_patterns:
-            match = re.search(pattern, text_content)
-            if match:
-                if len(match.groups()) == 3:  # Full date with year
-                    event['date'] = f"{match.group(1)}/{match.group(2):>02}/{match.group(3):>02}"
-                elif len(match.groups()) == 2:  # Month/day only
-                    current_year = datetime.now().year
-                    event['date'] = f"{current_year}/{match.group(1):>02}/{match.group(2):>02}"
-                break
-
-        for pattern in time_patterns:
-            match = re.search(pattern, text_content)
-            if match:
-                if len(match.groups()) == 2 and match.group(2):
-                    event['time'] = f"{match.group(1):>02}:{match.group(2):>02}"
-                else:
-                    event['time'] = f"{match.group(1):>02}:00"
-                break
-
-        # Extract description (first few sentences)
-        desc_elem = container.find(['p', 'div'],
-                                   class_=re.compile(r'desc|summary|content', re.I))
-        if desc_elem:
-            event['description'] = clean_text(desc_elem.get_text())[:200]
-
-        # Only return if we have essential information
-        if event['title'] and len(event['title']) > 3:
-            return event
-
-        return None
-
-    except Exception as e:
-        print(f"❌ Error extracting event info: {e}")
-        return None
-
-
+# Remove the complex extraction functions and keep it simple
 def clean_text(text):
-    """Clean and normalize text"""
+    """Clean and normalize text - simplified version"""
     if not text:
         return ""
 
@@ -208,7 +212,7 @@ def clean_text(text):
 
     # Remove common unwanted phrases
     unwanted_phrases = [
-        'Read more', 'Continue reading', '続きを読む', 'もっと見る'
+        'Read more', 'Continue reading', '続きを読む', 'もっと見る', 'HOME', 'Menu'
     ]
 
     for phrase in unwanted_phrases:
@@ -227,7 +231,7 @@ def try_fallback_sources():
 
 
 def format_events(events):
-    """Format events for Telegram message"""
+    """Format events for Telegram message - simplified like AI news bot"""
     print("Formatting events for Telegram...")
 
     # Get current time in JST (Japan Standard Time)
@@ -237,12 +241,12 @@ def format_events(events):
     current_date = now.strftime("%d/%m/%Y")
 
     message_lines = [
-        f"{current_time} {current_day} {current_date}: Sự kiện mới từ Event Checker 🎪",
+        f"{current_time} {current_day} {current_date}: イベント情報 🎪",
         ""
     ]
 
     for idx, event in enumerate(events, 1):
-        # Format title with link
+        # Simple format like AI news: number + markdown link
         if event['link']:
             title_line = f"{idx}. [{event['title']}]({event['link']})"
         else:
@@ -250,27 +254,16 @@ def format_events(events):
 
         message_lines.append(title_line)
 
-        # Add date and time if available
-        if event['date'] or event['time']:
-            datetime_info = []
-            if event['date']:
-                datetime_info.append(f"📅 {event['date']}")
-            if event['time']:
-                datetime_info.append(f"🕒 {event['time']}")
+        # Add date if available (keep Japanese format)
+        if event.get('date'):
+            message_lines.append(f"    📅 {event['date']}")
 
-            if datetime_info:
-                message_lines.append(f"    {' '.join(datetime_info)}")
-
-        # Add description if available
-        if event['description']:
-            desc = event['description']
-            if len(desc) > 100:
-                desc = desc[:97] + "..."
-            message_lines.append(f"    📝 {desc}")
-
-        # Add location if available
-        if event['location']:
-            message_lines.append(f"    📍 {event['location']}")
+        # Add summary if available
+        if event.get('summary'):
+            summary = event['summary']
+            if len(summary) > 100:
+                summary = summary[:97] + "..."
+            message_lines.append(f"    📝 {summary}")
 
         message_lines.append("")  # Empty line between events
 

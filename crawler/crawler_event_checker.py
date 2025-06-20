@@ -1,193 +1,221 @@
 # crawler/event_checker_crawler.py
-import requests
-from bs4 import BeautifulSoup
-import re
-import json
-from datetime import datetime, timedelta, timezone
-from utils.day_converter import convert_day_to_vietnamese
-from urllib.parse import urljoin, urlparse
 import time
 import random
+import re
+from datetime import datetime, timedelta, timezone
+from utils.day_converter import convert_day_to_vietnamese
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 
 # Base URL for Event Checker
 BASE_URL = "https://event-checker.info/"
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "ja,en-US;q=0.7,en;q=0.3",
-    "Accept-Encoding": "gzip, deflate, br",
-    "DNT": "1",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-}
 
 
-def create_session():
-    """Create session with retry logic"""
-    session = requests.Session()
-    session.headers.update(headers)
+def setup_chrome_driver():
+    """Setup Chrome driver optimized for Japanese websites"""
+    print("Setting up Chrome driver...")
 
-    from urllib3.util.retry import Retry
-    from requests.adapters import HTTPAdapter
+    options = Options()
 
-    retry_strategy = Retry(
-        total=3,
-        status_forcelist=[429, 500, 502, 503, 504],
-        backoff_factor=1,
-        raise_on_status=False
-    )
+    # Essential options
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
 
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
+    # Japanese-optimized options
+    options.add_argument("--lang=ja-JP")
+    options.add_argument("--accept-lang=ja-JP,ja,en-US,en")
 
-    return session
+    # Performance options
+    options.add_argument("--disable-images")
+    options.add_argument("--disable-javascript")  # Most content should be static
+    options.add_argument("--disable-plugins")
+    options.add_argument("--disable-extensions")
+
+    # User agent
+    options.add_argument(
+        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    # Additional stability options
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    try:
+        driver = webdriver.Chrome(options=options)
+        driver.set_page_load_timeout(60)
+        driver.implicitly_wait(10)
+
+        print("✅ Chrome driver setup successful")
+        return driver
+
+    except Exception as e:
+        print(f"❌ Failed to setup Chrome driver: {e}")
+        return None
 
 
 def fetch_events(max_events=10):
-    """Fetch events from イイベントチェッカー"""
+    """Fetch events using Selenium"""
     print(f"Fetching events from {BASE_URL}...")
 
-    session = create_session()
-
-    try:
-        # Add random delay to avoid being blocked
-        time.sleep(random.uniform(1, 2))
-
-        response = session.get(BASE_URL, timeout=30)
-        response.raise_for_status()
-
-        print(f"✅ Successfully connected to Event Checker (status: {response.status_code})")
-
-        # Handle encoding issues properly
-        response.encoding = 'utf-8'
-
-        soup = BeautifulSoup(response.content, 'html.parser', from_encoding='utf-8')
-        events = parse_events(soup)
-
-        # Limit number of events
-        return events[:max_events]
-
-    except requests.exceptions.Timeout:
-        print("❌ Timeout connecting to Event Checker")
-        return try_fallback_sources()
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Connection error: {e}")
-        return try_fallback_sources()
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+    driver = setup_chrome_driver()
+    if not driver:
         return []
 
+    try:
+        # Add random delay
+        time.sleep(random.uniform(1, 3))
 
-def parse_events(soup):
-    """Parse events from the webpage - Extract all titles like AI news bot"""
+        print(f"Loading page: {BASE_URL}")
+        driver.get(BASE_URL)
+
+        # Wait for page to load
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+
+        print("✅ Page loaded successfully")
+
+        # Additional wait for dynamic content
+        time.sleep(5)
+
+        # Get page source and parse
+        page_source = driver.page_source
+        print(f"Page source length: {len(page_source)}")
+
+        # Parse events directly from page source
+        events = parse_events_from_source(page_source)
+
+        return events[:max_events]
+
+    except TimeoutException:
+        print("❌ Page load timeout")
+        return []
+    except WebDriverException as e:
+        print(f"❌ WebDriver error: {e}")
+        return []
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+    finally:
+        try:
+            driver.quit()
+        except:
+            pass
+
+
+def parse_events_from_source(page_source):
+    """Parse events directly from page source text"""
     events = []
 
     try:
-        # Method 1: Look for specific title classes (like the h2 you found)
-        title_selectors = [
-            'h2.entry-card-title',
-            'h2[class*="entry-card-title"]',
-            'h2[class*="card-title"]',
-            '.entry-card-title',
-            'h1, h2, h3',  # Fallback to all headings
-        ]
+        print("Parsing events from page source...")
 
-        found_titles = False
+        # Method 1: Look for 今週のイベント section
+        weekly_events_found = False
 
-        for selector in title_selectors:
-            title_elements = soup.select(selector)
-            if title_elements:
-                print(f"✅ Found {len(title_elements)} titles with selector: {selector}")
-                found_titles = True
+        # Find the section containing 今週のイベント
+        if '今週のイベント' in page_source:
+            print("✅ Found 今週のイベント section")
+            weekly_events_found = True
 
-                for element in title_elements:
-                    title_text = clean_text(element.get_text())
+            # Extract the section around 今週のイベント
+            start_pos = page_source.find('今週のイベント')
 
-                    if title_text and len(title_text) > 5:
-                        # Look for parent element that might have a link
-                        link_elem = element.find_parent('a') or element.find('a')
-                        if not link_elem:
-                            # Look for sibling or nearby elements with links
-                            parent = element.find_parent(['article', 'div'])
-                            if parent:
-                                link_elem = parent.find('a', href=True)
+            # Get a reasonable chunk of text after the heading (next 2000 chars)
+            section_text = page_source[start_pos:start_pos + 2000]
 
-                        event_link = BASE_URL
-                        if link_elem and link_elem.get('href'):
-                            href = link_elem.get('href')
-                            event_link = urljoin(BASE_URL, href) if not href.startswith('http') else href
+            print(f"Section text sample: {section_text[:300]}")
+
+            # Parse the bullet point events: ・6/18 マック 恐竜バーガーズ
+            event_lines = re.findall(r'・([^・\n<>]+)', section_text)
+
+            print(f"Found {len(event_lines)} event lines")
+
+            for line in event_lines:
+                line = line.strip()
+                if len(line) > 5:  # Skip very short lines
+
+                    # Extract date and title: "6/18 マック 恐竜バーガーズ"
+                    date_match = re.match(r'^([0-9]+/[0-9]+(?:-[0-9]+/[0-9]+)?)\s+(.+)$', line)
+
+                    if date_match:
+                        date_part = date_match.group(1)
+                        title_part = date_match.group(2).strip()
+
+                        # Clean title from HTML entities
+                        title_part = clean_html_entities(title_part)
 
                         event = {
-                            'title': title_text,
-                            'link': event_link,
-                            'date': '',
-                            'summary': ''
+                            'title': title_part,
+                            'link': BASE_URL,
+                            'date': date_part,
+                            'summary': f"今週のイベント: {line}"
                         }
 
-                        # Look for date in title or surrounding elements
-                        date_match = re.search(r'([0-9]+月[0-9]+日)', title_text)
-                        if date_match:
-                            event['date'] = date_match.group(1)
+                        events.append(event)
+                        print(f"✅ Extracted: {event['title']}")
+                    else:
+                        # If doesn't match date pattern, still add it
+                        title = clean_html_entities(line.strip())
+                        if len(title) > 3:
+                            event = {
+                                'title': title,
+                                'link': BASE_URL,
+                                'date': '',
+                                'summary': f"今週のイベント: {line}"
+                            }
+                            events.append(event)
+                            print(f"✅ Extracted (no date): {event['title']}")
 
-                        # Try to get summary from nearby elements
-                        parent = element.find_parent(['article', 'div'])
-                        if parent:
-                            # Look for description elements
-                            desc_elem = parent.find(['p', 'div'],
-                                                    class_=re.compile(r'excerpt|summary|content|desc', re.I))
-                            if desc_elem:
-                                summary_text = clean_text(desc_elem.get_text())
-                                if summary_text and len(summary_text) > 10:
-                                    event['summary'] = summary_text[:150] + "..." if len(
-                                        summary_text) > 150 else summary_text
+        # Method 2: If no 今週のイベント found, look for bullet patterns anywhere
+        if not weekly_events_found:
+            print("📝 今週のイベント section not found, looking for bullet patterns...")
+
+            # Find all bullet point lines in the entire page
+            event_lines = re.findall(r'・([^・\n<>]+)', page_source)
+
+            print(f"Found {len(event_lines)} total bullet point lines")
+
+            # Filter and process lines that look like events
+            for line in event_lines:
+                line = line.strip()
+
+                # Basic filtering for event-like content
+                if (len(line) > 10 and
+                        re.search(r'[0-9]+/[0-9]+', line) and  # Has date pattern
+                        not any(skip in line for skip in ['メニュー', 'ホーム', 'サイト', 'ページ'])):
+
+                    date_match = re.match(r'^([0-9]+/[0-9]+(?:-[0-9]+/[0-9]+)?)\s+(.+)$', line)
+
+                    if date_match:
+                        date_part = date_match.group(1)
+                        title_part = clean_html_entities(date_match.group(2).strip())
+
+                        event = {
+                            'title': title_part,
+                            'link': BASE_URL,
+                            'date': date_part,
+                            'summary': line
+                        }
 
                         events.append(event)
-                        print(f"✅ Extracted: {event['title'][:50]}...")
+                        print(f"✅ Extracted: {event['title']}")
 
-                break  # Stop after finding titles with first successful selector
-
-        # Method 2: If no structured titles found, look for all links as fallback
-        if not found_titles:
-            print("📝 No structured titles found, trying link extraction...")
-            links = soup.find_all('a', href=True)
-            print(f"Found {len(links)} total links")
-
-            for link in links:
-                link_text = clean_text(link.get_text())
-                href = link.get('href')
-
-                # Take any substantial link text (no keyword filtering)
-                if link_text and len(link_text) > 10 and href:
-                    event = {
-                        'title': link_text,
-                        'link': urljoin(BASE_URL, href) if not href.startswith('http') else href,
-                        'date': '',
-                        'summary': ''
-                    }
-
-                    # Look for date in link text
-                    date_match = re.search(r'([0-9]+月[0-9]+日)', link_text)
-                    if date_match:
-                        event['date'] = date_match.group(1)
-
-                    events.append(event)
-                    print(f"✅ Link extracted: {event['title'][:50]}...")
-
-        # Remove duplicates and clean up
+        # Remove duplicates
         seen_titles = set()
         unique_events = []
 
         for event in events:
             title = event['title'].strip()
-
-            # Skip navigation/menu items and duplicates
-            if (title not in seen_titles and
-                    len(title) > 5 and
-                    not any(skip in title.lower() for skip in [
-                        'ホーム', 'メニュー', 'home', 'menu', 'search', '検索',
-                        'about', 'contact', 'privacy', 'サイト', 'ページ'
-                    ])):
+            if title not in seen_titles and len(title) > 2:
                 unique_events.append(event)
                 seen_titles.add(title)
 
@@ -201,37 +229,36 @@ def parse_events(soup):
         return []
 
 
-# Remove the complex extraction functions and keep it simple
-def clean_text(text):
-    """Clean and normalize text - simplified version"""
+def clean_html_entities(text):
+    """Clean HTML entities and unwanted characters"""
     if not text:
         return ""
 
-    # Remove extra whitespace and newlines
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+
+    # Common HTML entities
+    html_entities = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&nbsp;': ' ',
+        '&yen;': '¥'
+    }
+
+    for entity, replacement in html_entities.items():
+        text = text.replace(entity, replacement)
+
+    # Remove extra whitespace
     text = re.sub(r'\s+', ' ', text.strip())
 
-    # Remove common unwanted phrases
-    unwanted_phrases = [
-        'Read more', 'Continue reading', '続きを読む', 'もっと見る', 'HOME', 'Menu'
-    ]
-
-    for phrase in unwanted_phrases:
-        text = text.replace(phrase, '')
-
-    return text.strip()
-
-
-def try_fallback_sources():
-    """Try alternative methods or cached data"""
-    print("🔄 Trying fallback methods...")
-
-    # Could implement RSS feed parsing or cached data here
-    # For now, return empty list
-    return []
+    return text
 
 
 def format_events(events):
-    """Format events for Telegram message - simplified like AI news bot"""
+    """Format events for Telegram message"""
     print("Formatting events for Telegram...")
 
     # Get current time in JST (Japan Standard Time)
@@ -246,7 +273,7 @@ def format_events(events):
     ]
 
     for idx, event in enumerate(events, 1):
-        # Simple format like AI news: number + markdown link
+        # Format: number + markdown link
         if event['link']:
             title_line = f"{idx}. [{event['title']}]({event['link']})"
         else:
@@ -254,12 +281,12 @@ def format_events(events):
 
         message_lines.append(title_line)
 
-        # Add date if available (keep Japanese format)
+        # Add date if available
         if event.get('date'):
             message_lines.append(f"    📅 {event['date']}")
 
-        # Add summary if available
-        if event.get('summary'):
+        # Add summary if available and different from title
+        if event.get('summary') and event['summary'] != event['title']:
             summary = event['summary']
             if len(summary) > 100:
                 summary = summary[:97] + "..."
@@ -273,22 +300,22 @@ def format_events(events):
 
 def main():
     """Main function for testing"""
-    print("Testing Event Checker crawler...")
+    print("Testing Event Checker with Selenium...")
+    print("=" * 50)
 
-    events = fetch_events(5)
+    events = fetch_events(8)
 
     if events:
         print(f"\n✅ Found {len(events)} events:")
         for i, event in enumerate(events, 1):
             print(f"\n{i}. {event['title']}")
             print(f"   Date: {event.get('date', 'N/A')}")
-            print(f"   Time: {event.get('time', 'N/A')}")
             print(f"   Link: {event.get('link', 'N/A')}")
-            if event.get('description'):
-                print(f"   Description: {event['description'][:100]}...")
+            if event.get('summary'):
+                print(f"   Summary: {event['summary'][:80]}...")
 
         print("\n" + "=" * 50)
-        print("Formatted message:")
+        print("Formatted Telegram message:")
         print("=" * 50)
         formatted = format_events(events)
         print(formatted)
